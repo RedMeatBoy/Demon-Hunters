@@ -46,6 +46,18 @@ generateGrass();
 // --- Audio System (Web Audio API) ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
+// --- Master Volume Control ---
+const masterGain = audioCtx.createGain();
+masterGain.gain.value = 0.5;
+masterGain.connect(audioCtx.destination);
+let masterVolume = 0.5;
+let volumeDisplayTimer = 0;
+function setMasterVolume(v) {
+  masterVolume = Math.max(0, Math.min(1, v));
+  masterGain.gain.setValueAtTime(masterVolume, audioCtx.currentTime);
+  volumeDisplayTimer = 2.0;
+}
+
 // --- Lightsaber Sword Sound ---
 function playSwordSound() {
   const now = audioCtx.currentTime;
@@ -57,10 +69,10 @@ function playSwordSound() {
   osc1.frequency.setValueAtTime(120 + Math.random() * 20, now);
   osc1.frequency.exponentialRampToValueAtTime(180 + Math.random() * 30, now + 0.06);
   osc1.frequency.exponentialRampToValueAtTime(100, now + dur);
-  g1.gain.setValueAtTime(0.12, now);
-  g1.gain.linearRampToValueAtTime(0.18, now + 0.04);
+  g1.gain.setValueAtTime(0.04, now);
+  g1.gain.linearRampToValueAtTime(0.06, now + 0.04);
   g1.gain.exponentialRampToValueAtTime(0.001, now + dur);
-  osc1.connect(g1); g1.connect(audioCtx.destination);
+  osc1.connect(g1); g1.connect(masterGain);
   osc1.start(now); osc1.stop(now + dur);
   // High frequency buzz/sizzle
   const osc2 = audioCtx.createOscillator();
@@ -71,9 +83,9 @@ function playSwordSound() {
   osc2.frequency.exponentialRampToValueAtTime(360, now + 0.05);
   osc2.frequency.exponentialRampToValueAtTime(200, now + dur);
   bp.type = 'bandpass'; bp.frequency.value = 800; bp.Q.value = 2;
-  g2.gain.setValueAtTime(0.08, now);
+  g2.gain.setValueAtTime(0.03, now);
   g2.gain.exponentialRampToValueAtTime(0.001, now + dur);
-  osc2.connect(bp); bp.connect(g2); g2.connect(audioCtx.destination);
+  osc2.connect(bp); bp.connect(g2); g2.connect(masterGain);
   osc2.start(now); osc2.stop(now + dur);
   // Swing whoosh - pitch-swept noise
   const bufSize = audioCtx.sampleRate * 0.18;
@@ -86,9 +98,9 @@ function playSwordSound() {
   nf.frequency.setValueAtTime(3000, now);
   nf.frequency.exponentialRampToValueAtTime(600, now + 0.18);
   const ng = audioCtx.createGain();
-  ng.gain.setValueAtTime(0.1, now);
+  ng.gain.setValueAtTime(0.035, now);
   ng.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-  ns.connect(nf); nf.connect(ng); ng.connect(audioCtx.destination);
+  ns.connect(nf); nf.connect(ng); ng.connect(masterGain);
   ns.start(now); ns.stop(now + 0.18);
 }
 
@@ -102,7 +114,7 @@ function playHitSound() {
   osc.frequency.exponentialRampToValueAtTime(50, now + 0.12);
   gain.gain.setValueAtTime(0.25, now);
   gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.connect(gain); gain.connect(masterGain);
   osc.start(now); osc.stop(now + 0.12);
 }
 
@@ -140,7 +152,7 @@ function playDemonGrunt() {
     filter.frequency.setValueAtTime(250 + v * 30, now);
     filter.frequency.linearRampToValueAtTime(100, now + dur);
     filter.Q.value = 1;
-    osc.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+    osc.connect(filter); filter.connect(gain); gain.connect(masterGain);
     osc.start(now + v * 0.02); osc.stop(now + dur);
   }
   // Breath noise layer
@@ -151,7 +163,7 @@ function playDemonGrunt() {
   const ns = audioCtx.createBufferSource(); ns.buffer = b;
   const nf = audioCtx.createBiquadFilter(); nf.type = 'lowpass'; nf.frequency.value = 200; nf.Q.value = 0.5;
   const ng = audioCtx.createGain(); ng.gain.setValueAtTime(0.03, now); ng.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-  ns.connect(nf); nf.connect(ng); ng.connect(audioCtx.destination); ns.start(now); ns.stop(now + 0.4);
+  ns.connect(nf); nf.connect(ng); ng.connect(masterGain); ns.start(now); ns.stop(now + 0.4);
 }
 
 // --- Powerup Chime ---
@@ -166,7 +178,7 @@ function playPowerupSound() {
   gain.gain.setValueAtTime(0.2, now);
   gain.gain.setValueAtTime(0.25, now + 0.1);
   gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.connect(gain); gain.connect(masterGain);
   osc.start(now); osc.stop(now + 0.35);
   const osc2 = audioCtx.createOscillator();
   const g2 = audioCtx.createGain();
@@ -175,7 +187,7 @@ function playPowerupSound() {
   osc2.frequency.exponentialRampToValueAtTime(1600, now + 0.25);
   g2.gain.setValueAtTime(0.15, now + 0.05);
   g2.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-  osc2.connect(g2); g2.connect(audioCtx.destination);
+  osc2.connect(g2); g2.connect(masterGain);
   osc2.start(now + 0.05); osc2.stop(now + 0.3);
 }
 
@@ -187,9 +199,9 @@ function playShootSound() {
   osc.type = 'square';
   osc.frequency.setValueAtTime(180, now);
   osc.frequency.exponentialRampToValueAtTime(50, now + 0.12);
-  gain.gain.setValueAtTime(0.1, now);
+  gain.gain.setValueAtTime(0.03, now);
   gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.connect(gain); gain.connect(masterGain);
   osc.start(now); osc.stop(now + 0.12);
 }
 
@@ -204,7 +216,7 @@ function playExplosionSound() {
   osc.frequency.exponentialRampToValueAtTime(30, now + 0.3);
   og.gain.setValueAtTime(0.3, now);
   og.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-  osc.connect(og); og.connect(audioCtx.destination);
+  osc.connect(og); og.connect(masterGain);
   osc.start(now); osc.stop(now + 0.3);
   // Heavy noise burst
   const bufSize = audioCtx.sampleRate * 0.5;
@@ -220,7 +232,7 @@ function playExplosionSound() {
   gain.gain.setValueAtTime(0.35, now);
   gain.gain.linearRampToValueAtTime(0.2, now + 0.05);
   gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
-  noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+  noise.connect(filter); filter.connect(gain); gain.connect(masterGain);
   noise.start(now); noise.stop(now + 0.5);
   // Sub bass thump
   const sub = audioCtx.createOscillator();
@@ -230,7 +242,7 @@ function playExplosionSound() {
   sub.frequency.exponentialRampToValueAtTime(25, now + 0.35);
   sg.gain.setValueAtTime(0.25, now);
   sg.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-  sub.connect(sg); sg.connect(audioCtx.destination);
+  sub.connect(sg); sg.connect(masterGain);
   sub.start(now); sub.stop(now + 0.35);
 }
 
@@ -246,7 +258,7 @@ function playBombSound() {
   sg.gain.setValueAtTime(0.6, now);
   sg.gain.linearRampToValueAtTime(0.4, now + 0.1);
   sg.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
-  sub.connect(sg); sg.connect(audioCtx.destination);
+  sub.connect(sg); sg.connect(masterGain);
   sub.start(now); sub.stop(now + 1.2);
   // Initial sharp crack
   const crack = audioCtx.createOscillator();
@@ -256,7 +268,7 @@ function playBombSound() {
   crack.frequency.exponentialRampToValueAtTime(20, now + 0.15);
   cg.gain.setValueAtTime(0.5, now);
   cg.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-  crack.connect(cg); cg.connect(audioCtx.destination);
+  crack.connect(cg); cg.connect(masterGain);
   crack.start(now); crack.stop(now + 0.15);
   // Heavy rumble noise
   const bufSize = audioCtx.sampleRate * 1.0;
@@ -272,7 +284,7 @@ function playBombSound() {
   ng.gain.setValueAtTime(0.45, now);
   ng.gain.linearRampToValueAtTime(0.3, now + 0.1);
   ng.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
-  noise.connect(filter); filter.connect(ng); ng.connect(audioCtx.destination);
+  noise.connect(filter); filter.connect(ng); ng.connect(masterGain);
   noise.start(now); noise.stop(now + 1.0);
   // Second rumble layer for body
   const noise2 = audioCtx.createBufferSource(); noise2.buffer = buf;
@@ -281,7 +293,7 @@ function playBombSound() {
   const g2 = audioCtx.createGain();
   g2.gain.setValueAtTime(0.3, now + 0.05);
   g2.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
-  noise2.connect(f2); f2.connect(g2); g2.connect(audioCtx.destination);
+  noise2.connect(f2); f2.connect(g2); g2.connect(masterGain);
   noise2.start(now); noise2.stop(now + 0.8);
 }
 
@@ -304,7 +316,7 @@ function playDashSound() {
   gain.gain.setValueAtTime(0.01, now);
   gain.gain.linearRampToValueAtTime(0.3, now + 0.06);
   gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
-  noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+  noise.connect(filter); filter.connect(gain); gain.connect(masterGain);
   noise.start(now); noise.stop(now + dur);
   // Tonal wind element
   const osc = audioCtx.createOscillator();
@@ -316,7 +328,7 @@ function playDashSound() {
   og.gain.setValueAtTime(0.06, now);
   og.gain.linearRampToValueAtTime(0.1, now + 0.08);
   og.gain.exponentialRampToValueAtTime(0.001, now + dur);
-  osc.connect(og); og.connect(audioCtx.destination);
+  osc.connect(og); og.connect(masterGain);
   osc.start(now); osc.stop(now + dur);
 }
 
@@ -329,6 +341,11 @@ window.addEventListener('keydown', () => {
 // ========================================
 // --- Game State ---
 let state = 'menu'; // menu, playing, paused, gameover, victory, nameentry, leaderboard
+
+// --- Camera System ---
+const CAMERA_ZOOM = 2.0;
+const CAMERA_LERP = 5.0; // smoothing speed (higher = snappier)
+let cameraX = 0, cameraY = 0; // camera center (world coords)
 let timeLimit = 0;
 let timeRemaining = 0;
 let kills = 0;
@@ -500,6 +517,36 @@ function scheduleBeat() {
       bg.gain.setValueAtTime(0.12 * intensity, now); bg.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
       bass.connect(bf); bf.connect(bg); bg.connect(musicGain); bass.start(now); bass.stop(now + 0.35);
     }
+    // Melody - pentatonic arpeggio (plays every 2 beats)
+    if (beat % 2 === 0) {
+      // A minor pentatonic: A C D E G across octaves
+      const melodyNormal = [220, 261.6, 293.7, 329.6, 392, 440, 523.3, 587.3, 659.3, 784, 440, 392, 329.6, 293.7, 261.6, 220];
+      // Boss: D minor / darker feel
+      const melodyBoss = [146.8, 174.6, 196, 220, 233.1, 293.7, 349.2, 392, 440, 466.2, 392, 349.2, 293.7, 233.1, 220, 196];
+      const mel = bossAlive ? melodyBoss : melodyNormal;
+      const noteIdx = Math.floor(beat / 2) % mel.length;
+      const freq = mel[noteIdx];
+      const dur = musicTempo * 0.0018; // slightly shorter than the beat gap
+      // Main melody voice - triangle for warm tone
+      const mOsc = audioCtx.createOscillator(); const mGain = audioCtx.createGain();
+      mOsc.type = 'triangle';
+      mOsc.frequency.setValueAtTime(freq, now);
+      mGain.gain.setValueAtTime(0.06 * intensity, now);
+      mGain.gain.setValueAtTime(0.06 * intensity, now + dur * 0.6);
+      mGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+      mOsc.connect(mGain); mGain.connect(musicGain);
+      mOsc.start(now); mOsc.stop(now + dur);
+      // Soft sine octave above for shimmer (every other melody note)
+      if (noteIdx % 2 === 0) {
+        const sOsc = audioCtx.createOscillator(); const sGain = audioCtx.createGain();
+        sOsc.type = 'sine';
+        sOsc.frequency.setValueAtTime(freq * 2, now);
+        sGain.gain.setValueAtTime(0.02 * intensity, now);
+        sGain.gain.exponentialRampToValueAtTime(0.001, now + dur * 0.7);
+        sOsc.connect(sGain); sGain.connect(musicGain);
+        sOsc.start(now); sOsc.stop(now + dur * 0.7);
+      }
+    }
     musicBeat++;
     scheduleBeat();
   }, musicTempo);
@@ -511,7 +558,7 @@ function startMusic() {
   musicBeat = 0;
   musicGain = audioCtx.createGain();
   musicGain.gain.value = 0.08;
-  musicGain.connect(audioCtx.destination);
+  musicGain.connect(masterGain);
   scheduleBeat();
 }
 function stopMusic() {
@@ -616,7 +663,7 @@ function playBossRoar() {
     gain.gain.linearRampToValueAtTime(0.1, now + 0.3);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
     filter.type = 'lowpass'; filter.frequency.value = 180 + v * 20;
-    osc.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+    osc.connect(filter); filter.connect(gain); gain.connect(masterGain);
     osc.start(now + v * 0.03); osc.stop(now + 1.5);
   }
   // Rumble noise
@@ -626,7 +673,7 @@ function playBossRoar() {
   const nf = audioCtx.createBiquadFilter(); nf.type = 'lowpass'; nf.frequency.value = 120;
   const ng = audioCtx.createGain(); ng.gain.setValueAtTime(0.15, audioCtx.currentTime);
   ng.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.2);
-  ns.connect(nf); nf.connect(ng); ng.connect(audioCtx.destination);
+  ns.connect(nf); nf.connect(ng); ng.connect(masterGain);
   ns.start(audioCtx.currentTime); ns.stop(audioCtx.currentTime + 1.2);
 }
 
@@ -750,7 +797,7 @@ function playBossTeleportSound() {
     osc.frequency.exponentialRampToValueAtTime(30 + v * 10, now + 0.6);
     gain.gain.setValueAtTime(0.06, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
-    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.connect(gain); gain.connect(masterGain);
     osc.start(now + v * 0.02); osc.stop(now + 0.6);
   }
   // Fire crackle
@@ -760,7 +807,7 @@ function playBossTeleportSound() {
   const ns = audioCtx.createBufferSource(); ns.buffer = buf;
   const nf = audioCtx.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 300; nf.Q.value = 1;
   const ng = audioCtx.createGain(); ng.gain.setValueAtTime(0.12, now); ng.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
-  ns.connect(nf); nf.connect(ng); ng.connect(audioCtx.destination); ns.start(now); ns.stop(now + 0.8);
+  ns.connect(nf); nf.connect(ng); ng.connect(masterGain); ns.start(now); ns.stop(now + 0.8);
 }
 
 // --- Weather System (Rain + Thunder/Lightning) ---
@@ -808,7 +855,7 @@ function playThunderSound() {
   g.gain.linearRampToValueAtTime(0.35, now + 0.15);
   g.gain.linearRampToValueAtTime(0.25, now + 0.5);
   g.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
-  ns.connect(lp); lp.connect(g); g.connect(audioCtx.destination);
+  ns.connect(lp); lp.connect(g); g.connect(masterGain);
   ns.start(now); ns.stop(now + 2.5);
   // Sub bass
   const sub = audioCtx.createOscillator();
@@ -818,7 +865,7 @@ function playThunderSound() {
   sub.frequency.exponentialRampToValueAtTime(15, now + 1.5);
   sg.gain.setValueAtTime(0.25, now + 0.1);
   sg.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
-  sub.connect(sg); sg.connect(audioCtx.destination);
+  sub.connect(sg); sg.connect(masterGain);
   sub.start(now + 0.1); sub.stop(now + 1.5);
 }
 
@@ -833,7 +880,7 @@ function playLightningCrack() {
   const g = audioCtx.createGain();
   g.gain.setValueAtTime(0.3, now);
   g.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-  ns.connect(hp); hp.connect(g); g.connect(audioCtx.destination);
+  ns.connect(hp); hp.connect(g); g.connect(masterGain);
   ns.start(now); ns.stop(now + 0.3);
   // Electric zap
   const osc = audioCtx.createOscillator();
@@ -843,7 +890,7 @@ function playLightningCrack() {
   osc.frequency.exponentialRampToValueAtTime(100, now + 0.15);
   og.gain.setValueAtTime(0.2, now);
   og.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-  osc.connect(og); og.connect(audioCtx.destination);
+  osc.connect(og); og.connect(masterGain);
   osc.start(now); osc.stop(now + 0.15);
 }
 
@@ -877,6 +924,9 @@ const timeOptions = [
 window.addEventListener('keydown', e => {
   keys[e.code] = true;
   e.preventDefault();
+  // Volume controls (work in any state)
+  if (e.code === 'Equal' || e.code === 'NumpadAdd') { setMasterVolume(masterVolume + 0.1); return; }
+  if (e.code === 'Minus' || e.code === 'NumpadSubtract') { setMasterVolume(masterVolume - 0.1); return; }
   if (state === 'menu') {
     const up = e.code === 'ArrowUp' || e.code === 'KeyW';
     const down = e.code === 'ArrowDown' || e.code === 'KeyS';
@@ -1023,10 +1073,21 @@ function useBomb() {
 }
 
 // --- Dash ---
+function playDashDeniedSound() {
+  const now = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = 'square';
+  osc.frequency.setValueAtTime(200, now);
+  osc.frequency.exponentialRampToValueAtTime(100, now + 0.12);
+  g.gain.setValueAtTime(0.08, now);
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+  osc.connect(g); g.connect(masterGain);
+  osc.start(now); osc.stop(now + 0.12);
+}
 function useDash() {
   if (dashCooldown > 0) {
-    // Penalty for dashing during cooldown
-    damagePlayer(10, 0.5, { shake: 8, shakeDur: 0.2, blood: 10, label: 'DASH PENALTY -10 HP', color: '#ff2222', fontSize: 22, textOffY: 30 });
+    playDashDeniedSound();
     return;
   }
   dashCooldown = Math.max(0.5, DASH_COOLDOWN - dashCooldownReduction);
@@ -1109,7 +1170,7 @@ let healthPowerups = [];
 let healthSpawnTimer = 0;
 const HEALTH_SPAWN_INTERVAL = 20;
 let wasAbove50 = true;
-const HEALTH_RESTORE = 3;
+const HEALTH_RESTORE = 5;
 
 // --- Demons ---
 let demons = [];
@@ -1201,6 +1262,9 @@ function startGame(seconds) {
   thunderTimer = THUNDER_MIN + Math.random() * (THUNDER_MAX - THUNDER_MIN);
   initRain();
   resetPlayer();
+  // Snap camera to player start position (no lerp delay)
+  cameraX = player.x;
+  cameraY = player.y;
   startMusic();
 }
 
@@ -1801,6 +1865,17 @@ function update(dt) {
     spawnFinalBoss();
   }
 
+  // Camera update (runs even during entrance timers)
+  {
+    const lf = 1 - Math.exp(-CAMERA_LERP * dt);
+    cameraX += (player.x - cameraX) * lf;
+    cameraY += (player.y - cameraY) * lf;
+    const hvw = (canvas.width / CAMERA_ZOOM) / 2;
+    const hvh = (canvas.height / CAMERA_ZOOM) / 2;
+    cameraX = Math.max(hvw, Math.min(canvas.width - hvw, cameraX));
+    cameraY = Math.max(hvh, Math.min(canvas.height - hvh, cameraY));
+  }
+
   // --- Mini-Demon Lord Entrance Timer ---
   if (miniDemonLordEntranceTimer > 0) {
     miniDemonLordEntranceTimer -= dt;
@@ -2185,6 +2260,9 @@ function update(dt) {
     if (ft.life <= 0) floatingTexts.splice(i, 1);
   }
 
+  // --- Volume Display Timer ---
+  if (volumeDisplayTimer > 0) volumeDisplayTimer -= dt;
+
   // --- Milestone Banner ---
   if (milestoneBannerTimer > 0) milestoneBannerTimer -= dt;
 
@@ -2199,7 +2277,13 @@ function update(dt) {
 // ========================================
 // DRAW FUNCTIONS
 // ========================================
-function draw() {
+// Helper: apply camera transform (world space)
+function applyCameraTransform() {
+  ctx.scale(CAMERA_ZOOM, CAMERA_ZOOM);
+  ctx.translate(-cameraX + canvas.width / (2 * CAMERA_ZOOM), -cameraY + canvas.height / (2 * CAMERA_ZOOM));
+}
+
+function drawBackground() {
   // Dirt field background
   ctx.fillStyle = '#6b5735';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -2230,18 +2314,32 @@ function draw() {
       ctx.stroke();
     }
   }
+}
 
-  if (state === 'menu') { drawMenu(); return; }
-  if (state === 'leaderboard') { drawLeaderboardScreen(); return; }
-
-  // Apply screen shake for gameplay states
+function draw() {
   ctx.save();
-  if (state === 'playing' || state === 'paused') ctx.translate(shakeX, shakeY);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); // reset to identity
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  if (state === 'gameover') { drawGame(); drawMiniDemonLordExplosion(); drawGameOverScreen(); ctx.restore(); return; }
-  if (state === 'victory') { drawGame(); drawVictoryScreen(); ctx.restore(); return; }
-  if (state === 'nameentry') { drawGame(); drawNameEntry(); ctx.restore(); return; }
-  if (state === 'paused') { drawGame(); drawHUD(); drawPauseScreen(); ctx.restore(); return; }
+  if (state === 'menu') {
+    drawBackground();
+    drawMenu();
+    ctx.restore();
+    return;
+  }
+  if (state === 'leaderboard') {
+    drawBackground();
+    drawLeaderboardScreen();
+    ctx.restore();
+    return;
+  }
+
+  // --- World-space rendering (camera + shake) ---
+  ctx.save();
+  if (state === 'playing' || state === 'paused') ctx.translate(shakeX * CAMERA_ZOOM, shakeY * CAMERA_ZOOM);
+  applyCameraTransform();
+
+  drawBackground();
   drawGame();
   drawLightningWarnings();
   drawBossPortal();
@@ -2249,13 +2347,21 @@ function draw() {
   drawBossShockwaves();
   drawBossFireballs();
   drawFloatingTexts();
-  drawEdgeIndicators();
   drawRain();
   drawLightningStrikes();
+  drawMiniDemonLordExplosion();
+
+  ctx.restore(); // back to screen space
+
+  // --- Screen-space rendering (HUD, overlays) ---
+  if (state === 'gameover') { drawGameOverScreen(); ctx.restore(); return; }
+  if (state === 'victory') { drawVictoryScreen(); ctx.restore(); return; }
+  if (state === 'nameentry') { drawNameEntry(); ctx.restore(); return; }
+  if (state === 'paused') { drawHUD(); drawPauseScreen(); ctx.restore(); return; }
+  drawEdgeIndicators();
   drawHUD();
   drawBossHPBar();
   drawMiniDemonLordHPBar();
-  drawMiniDemonLordExplosion();
   drawComboDisplay();
   drawLowHealthFlash();
   drawControlsLegend();
@@ -3134,7 +3240,7 @@ function drawHealthPowerup(hp) {
 
   // +10 HP label below
   ctx.fillStyle = '#44ff44'; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center';
-  ctx.fillText('+3 HP', px, py + h + 14);
+  ctx.fillText('+5 HP', px, py + h + 14);
 
   ctx.restore();
 }
@@ -3266,6 +3372,26 @@ function drawHUD() {
     ctx.fillText(`${Math.ceil(playerShield)}s`, 95 + barW / 2, shieldY - 1);
     ctx.textAlign = 'left';
   }
+
+  // Volume indicator (shown briefly when changed)
+  if (volumeDisplayTimer > 0) {
+    const alpha = volumeDisplayTimer < 0.5 ? volumeDisplayTimer / 0.5 : 1;
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.9;
+    const vx = canvas.width / 2, vy = canvas.height - 40;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(vx - 120, vy - 16, 240, 28);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center';
+    const pct = Math.round(masterVolume * 100);
+    ctx.fillText(`VOLUME: ${pct}%  [+/-]`, vx, vy + 4);
+    // Volume bar
+    ctx.fillStyle = '#333';
+    ctx.fillRect(vx - 80, vy + 8, 160, 6);
+    ctx.fillStyle = '#44ccff';
+    ctx.fillRect(vx - 80, vy + 8, 160 * masterVolume, 6);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
 }
 
 // --- Floating Damage Numbers ---
@@ -3283,18 +3409,30 @@ function drawFloatingTexts() {
   }
 }
 
-// --- Edge Indicators (arrows pointing to off-screen demons) ---
+// --- Edge Indicators (arrows pointing to off-viewport demons) ---
+function worldToScreen(wx, wy) {
+  return {
+    x: (wx - cameraX) * CAMERA_ZOOM + canvas.width / 2,
+    y: (wy - cameraY) * CAMERA_ZOOM + canvas.height / 2,
+  };
+}
 function drawEdgeIndicators() {
   const margin = 40;
+  const screenW = canvas.width, screenH = canvas.height;
+  // Player screen pos is always roughly center
+  const playerScreen = worldToScreen(player.x, player.y);
   for (const d of demons) {
-    if (d.x >= 0 && d.x <= canvas.width && d.y >= 0 && d.y <= canvas.height) continue;
-    const angle = Math.atan2(d.y - player.y, d.x - player.x);
-    const edgeX = Math.max(margin, Math.min(canvas.width - margin, player.x + Math.cos(angle) * 300));
-    const edgeY = Math.max(margin, Math.min(canvas.height - margin, player.y + Math.sin(angle) * 300));
+    const ds = worldToScreen(d.x, d.y);
+    // Skip if demon is visible on screen (with some padding for its radius)
+    const pad = d.radius * CAMERA_ZOOM;
+    if (ds.x + pad >= 0 && ds.x - pad <= screenW && ds.y + pad >= 0 && ds.y - pad <= screenH) continue;
+    const angle = Math.atan2(ds.y - playerScreen.y, ds.x - playerScreen.x);
+    const edgeX = Math.max(margin, Math.min(screenW - margin, playerScreen.x + Math.cos(angle) * 300));
+    const edgeY = Math.max(margin, Math.min(screenH - margin, playerScreen.y + Math.sin(angle) * 300));
     ctx.save();
     ctx.translate(edgeX, edgeY);
     ctx.rotate(angle);
-    ctx.fillStyle = d.type === 'green' ? '#44ff44' : '#ff4444';
+    ctx.fillStyle = d.type === 'green' ? '#44ff44' : (d.type === 'finalBoss' || d.type === 'miniDemonLord') ? '#ff88ff' : '#ff4444';
     ctx.globalAlpha = 0.7;
     ctx.beginPath();
     ctx.moveTo(12, 0);
@@ -3350,7 +3488,7 @@ function drawControlsLegend() {
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 16px monospace';
   ctx.textAlign = 'center';
-  ctx.fillText('WASD/Arrows = Move  |  Auto-Sword  |  Auto-Rockets  |  SPACE = Dash  |  CTRL = Bomb', cx, y + 8);
+  ctx.fillText('WASD/Arrows = Move  |  Auto-Sword  |  Auto-Rockets  |  SPACE = Dash  |  CTRL = Bomb  |  +/- = Volume', cx, y + 8);
   ctx.globalAlpha = 1;
   ctx.restore();
 }
@@ -3806,8 +3944,8 @@ function drawBossEntrance() {
     ctx.fillStyle = `rgba(255,200,150,${0.3 * alpha})`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
-  // Draw the portal behind text
-  drawBossPortal();
+  // Draw the portal in world space
+  ctx.save(); applyCameraTransform(); drawBossPortal(); ctx.restore();
   // Text
   ctx.fillStyle = `rgba(255,${Math.floor(50 + Math.sin(performance.now()/100)*30)},0,${alpha})`;
   ctx.font = 'bold 72px monospace';
@@ -3856,7 +3994,7 @@ function drawMiniDemonLordEntrance() {
     ctx.fillStyle = `rgba(180,100,255,${0.3 * alpha})`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
-  drawBossPortal();
+  ctx.save(); applyCameraTransform(); drawBossPortal(); ctx.restore();
   ctx.fillStyle = `rgba(200,${Math.floor(50 + Math.sin(performance.now()/100)*30)},255,${alpha})`;
   ctx.font = 'bold 64px monospace';
   ctx.textAlign = 'center';
@@ -3954,7 +4092,7 @@ function drawMenu() {
   ctx.fillText('DEMON HUNTERS', cx, 120);
 
   ctx.fillStyle = '#aaa'; ctx.font = '16px monospace';
-  ctx.fillText('WASD/Arrows = Move  |  CTRL = Bomb  |  SPACE = Dash', cx, 150);
+  ctx.fillText('WASD/Arrows = Move  |  CTRL = Bomb  |  SPACE = Dash  |  +/- = Volume', cx, 150);
 
   const colLeft = cx - 150, colRight = cx + 150, topY = 180;
   const btnW = 200, btnH = 44, gap = 54;
