@@ -12,3 +12,26 @@ export const CAMERA = {
   WIDTH: 1280,
   HEIGHT: 720,
 } as const;
+
+// Player bindings. Values are KeyboardEvent.code strings so the mapping
+// is independent of the user's keyboard layout (CLAUDE.md control map).
+// P2 bindings are seeded; no P2 entity exists in the scaffold task —
+// the co-op consumer is the very next task.
+export const INPUT = {
+  P1: {
+    UP: 'KeyW',
+    DOWN: 'KeyS',
+    LEFT: 'KeyA',
+    RIGHT: 'KeyD',
+    PARRY: 'Space',
+    DASH: 'ControlLeft',
+  },
+  P2: {
+    UP: 'ArrowUp',
+    DOWN: 'ArrowDown',
+    LEFT: 'ArrowLeft',
+    RIGHT: 'ArrowRight',
+    PARRY: 'Numpad0',
+    DASH: 'NumpadEnter',
+  },
+} as const;
