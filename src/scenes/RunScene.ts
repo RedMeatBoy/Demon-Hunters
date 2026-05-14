@@ -24,7 +24,8 @@ export class RunScene extends Phaser.Scene {
 
     const cx = ARENA.WIDTH / 2;
     const cy = ARENA.HEIGHT / 2;
-    this.hunters.push(this.spawnHunter('P1', cx, cy, HUNTER.P1_COLOR));
+    this.hunters.push(this.spawnHunter('P1', cx - HUNTER.SPAWN_OFFSET_X_PX, cy, HUNTER.P1_COLOR));
+    this.hunters.push(this.spawnHunter('P2', cx + HUNTER.SPAWN_OFFSET_X_PX, cy, HUNTER.P2_COLOR));
   }
 
   update(_time: number, deltaMs: number): void {

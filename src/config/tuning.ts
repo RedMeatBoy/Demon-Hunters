@@ -49,4 +49,6 @@ export const HUNTER = {
   SQUARE_SIZE_PX: 28,
   P1_COLOR: 0xE94F37,
   P2_COLOR: 0x44BBA4,
+  // Each player spawns this many px horizontally from arena centre.
+  SPAWN_OFFSET_X_PX: 80,
 } as const;
