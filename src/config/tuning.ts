@@ -13,6 +13,14 @@ export const CAMERA = {
   HEIGHT: 720,
 } as const;
 
+// The arena hunters move within. Sized to the canvas so the fixed-wide
+// camera shows the whole play area; hunters are clamped to this box, so
+// neither player can wander off-screen (no scrolling, no follow).
+export const ARENA = {
+  WIDTH: CANVAS.WIDTH,
+  HEIGHT: CANVAS.HEIGHT,
+} as const;
+
 // Player bindings. Values are KeyboardEvent.code strings so the mapping
 // is independent of the user's keyboard layout (CLAUDE.md control map).
 // P2 bindings are seeded; no P2 entity exists in the scaffold task —
