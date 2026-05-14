@@ -9,8 +9,8 @@ export interface MoveVector {
 }
 
 // One intent per player per frame. Parry and dash fields are defined now
-// so the consumer surface is stable for the next tasks (co-op, then the
-// parry layer per HIT-THE-BEAT-SPEC) — they are unconsumed in this task.
+// so the consumer surface is stable for the next tasks (the parry layer
+// per HIT-THE-BEAT-SPEC) — they are unconsumed in this task.
 export interface PlayerIntent {
   readonly move: MoveVector;
   readonly parryHeld: boolean;
@@ -29,18 +29,23 @@ interface PlayerBindings {
 }
 
 // The ONLY place raw keyboard state is read (CLAUDE.md). Consumers call
-// getIntent(playerId) — they never see a key. A second player and a
-// future gamepad source are additive: more bindings, more intent
-// producers, same intent shape.
+// getIntent(playerId) — they never see a key. A future gamepad source is
+// additive: a new intent producer, same intent shape.
+//
+// Edge-triggered intents (parryPressed / dashPressed) self-clear via a
+// POST_UPDATE listener — they are valid for exactly one frame after the
+// keydown, regardless of which or how many consumers read them.
 export class InputSystem {
   private readonly held = new Set<string>();
-  private pressedThisFrame = new Set<string>();
+  private readonly pressedThisFrame = new Set<string>();
   private readonly bindingsByPlayer: Record<PlayerId, PlayerBindings>;
   private readonly ownedKeys: ReadonlySet<string>;
+  private readonly scene: Phaser.Scene;
   private readonly onKeyDown: (e: KeyboardEvent) => void;
   private readonly onKeyUp: (e: KeyboardEvent) => void;
 
   constructor(scene: Phaser.Scene) {
+    this.scene = scene;
     this.bindingsByPlayer = { P1: INPUT.P1, P2: INPUT.P2 };
     this.ownedKeys = new Set<string>([
       ...Object.values(INPUT.P1),
@@ -64,8 +69,9 @@ export class InputSystem {
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
 
-    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroy());
-    scene.events.once(Phaser.Scenes.Events.DESTROY, () => this.destroy());
+    scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.clearEdgeIntents, this);
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this);
+    scene.events.once(Phaser.Scenes.Events.DESTROY, this.destroy, this);
   }
 
   getIntent(player: PlayerId): PlayerIntent {
@@ -94,14 +100,14 @@ export class InputSystem {
     };
   }
 
-  // Edge-triggered flags are valid for one frame; clear after consumers read.
-  endFrame(): void {
+  private clearEdgeIntents(): void {
     this.pressedThisFrame.clear();
   }
 
   private destroy(): void {
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
+    this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.clearEdgeIntents, this);
     this.held.clear();
     this.pressedThisFrame.clear();
   }

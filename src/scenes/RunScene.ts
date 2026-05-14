@@ -27,7 +27,6 @@ export class RunScene extends Phaser.Scene {
     const dt = deltaMs / 1000;
     const intent = this.inputSystem.getIntent('P1');
     this.applyMovement(this.p1, intent.move.x, intent.move.y, dt);
-    this.inputSystem.endFrame();
   }
 
   private spawnHunter(id: 'P1' | 'P2', x: number, y: number, color: number): Hunter {
