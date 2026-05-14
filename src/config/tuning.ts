@@ -35,3 +35,10 @@ export const INPUT = {
     DASH: 'NumpadEnter',
   },
 } as const;
+
+export const HUNTER = {
+  MOVE_SPEED_PX_PER_SEC: 240,
+  SQUARE_SIZE_PX: 28,
+  P1_COLOR: 0xE94F37,
+  P2_COLOR: 0x44BBA4,
+} as const;
