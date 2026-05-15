@@ -49,11 +49,6 @@ export const INPUT = {
 export const HUNTER = {
   MOVE_SPEED_PX_PER_SEC: 240,
   SQUARE_SIZE_PX: 28,
-  // Scaffold placeholder colours — superseded by HunterDef.bodyColor in
-  // hunters.ts, which is the data source once a hunter is assigned to a
-  // player slot. Kept for the scaffold's interim P1/P2 visuals; harmless.
-  P1_COLOR: 0xE94F37,
-  P2_COLOR: 0x44BBA4,
   // Each player spawns this many px horizontally from arena centre.
   SPAWN_OFFSET_X_PX: 80,
 } as const;
@@ -61,7 +56,7 @@ export const HUNTER = {
 // Which HunterDef each player slot plays this run. Swap to demo other
 // hunters. A real character-select lives in MenuScene (HUNTER-SPEC §6).
 export const HUNTER_ASSIGNMENT: Record<'P1' | 'P2', HunterDefId> = {
-  P1: 'riya',
+  P1: 'bex',
   P2: 'nim',
 };
 
