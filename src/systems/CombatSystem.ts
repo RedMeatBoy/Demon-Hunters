@@ -95,6 +95,34 @@ export class CombatSystem {
     });
   }
 
+  // Parry-outcome entry point: a Dancer lob reflected by Hit the Beat
+  // (HIT-THE-BEAT-SPEC §4). Same pool as Nim's stars — damages any
+  // enemy it hits, not only its original Dancer.
+  spawnHunterProjectile(
+    x: number,
+    y: number,
+    vx: number,
+    vy: number,
+    damage: number,
+    radius: number,
+    color: number,
+    lifetimeMs: number,
+  ): void {
+    const sprite = this.scene.add.circle(x, y, radius, color);
+    this.projectiles.push({
+      team: 'hunter',
+      x,
+      y,
+      vx,
+      vy,
+      damage,
+      remainingLifetimeMs: lifetimeMs,
+      radius,
+      alive: true,
+      sprite,
+    });
+  }
+
   private tickHunter(hunter: Hunter, deltaMs: number): void {
     if (hunter.attackCooldownMs > 0) {
       hunter.attackCooldownMs -= deltaMs;
