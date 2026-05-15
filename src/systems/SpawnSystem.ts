@@ -89,6 +89,7 @@ export class SpawnSystem {
       lungeRemainingPx: 0,
       lungeHits: new Set(),
       contactCooldownByHunter: { P1: 0, P2: 0 },
+      parriedThisAttack: false,
     };
   }
 }

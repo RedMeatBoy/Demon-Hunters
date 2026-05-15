@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ATTACK, ENEMY, HUNTER } from '../config/tuning';
+import { ATTACK, ENEMY, HUNTER, PARRY } from '../config/tuning';
 import type { AttackDef, LobAttack, SlamAttack } from '../config/enemies';
 import type { Demon } from '../entities/Demon';
 import type { Hunter } from '../entities/Hunter';
@@ -85,10 +85,21 @@ export class EnemySystem {
           enemy.state = 'moving';
         }
         break;
+      case 'staggered':
+        enemy.stateTimerMs -= deltaMs;
+        if (enemy.stateTimerMs <= 0) {
+          this.exitStagger(enemy);
+        }
+        break;
     }
 
-    // 3. Contact damage (any state — the body is solid).
-    this.applyContactDamage(enemy);
+    // 3. Contact damage (any state — the body is solid). Staggered enemies
+    // are visibly incapacitated; they do not chip the player they just
+    // failed to land an attack on (HIT-THE-BEAT-SPEC §1.6 — the in-encounter
+    // payoff must read as a real opening).
+    if (enemy.state !== 'staggered') {
+      this.applyContactDamage(enemy);
+    }
 
     // 4. Sync visual to position.
     enemy.sprite.setPosition(enemy.x, enemy.y);
@@ -178,7 +189,16 @@ export class EnemySystem {
 
   private enterWindup(enemy: Demon, attack: AttackDef, target: Hunter): void {
     enemy.state = 'windup';
-    enemy.stateTimerMs = attack.windupMs;
+    // Parryable attacks: the state timer extends past the visible windup
+    // (= the Beat Ring's contraction time) by half the active parry
+    // window. The strike/damage resolves at the END of the extended
+    // duration, so a press anywhere in the centered window around the
+    // visual "beat" can redirect the resolution — see endWindup. The
+    // ring still contracts over attack.windupMs and the player reads
+    // timing from the visual, not from this extension.
+    const parryHalfMs = enemy.def.telegraphed ? PARRY.ACTIVE_WINDOW_MS / 2 : 0;
+    enemy.stateTimerMs = attack.windupMs + parryHalfMs;
+    enemy.parriedThisAttack = false;
     // Body-animation tell. Per ENEMY-BRIEF §3: must be unmistakable.
     enemy.sprite.setFillStyle(enemy.def.windupTintColor);
 
@@ -199,8 +219,24 @@ export class EnemySystem {
   private endWindup(enemy: Demon): void {
     const attack = enemy.def.attack;
     if (!attack) return;
-    // Restore base body colour — the windup tell ends.
+    // Restore base body colour — the windup tell ends. Stagger and reflect
+    // outcomes below may then immediately re-tint to their own colour.
     enemy.sprite.setFillStyle(enemy.def.bodyColor);
+
+    // Parry resolution. Per HIT-THE-BEAT-SPEC §4: lunge/slam negate + stagger,
+    // lob reflects (no stagger — the Dancer keeps going). The strike has
+    // not applied damage yet (the extension in enterWindup is exactly so
+    // this redirect lives in one place).
+    if (enemy.parriedThisAttack) {
+      enemy.parriedThisAttack = false;
+      if (attack.kind === 'lob') {
+        this.executeReflectedLob(enemy, attack);
+        this.enterRecovery(enemy, attack);
+      } else {
+        this.enterStagger(enemy, attack);
+      }
+      return;
+    }
 
     switch (attack.kind) {
       case 'lunge':
@@ -217,6 +253,21 @@ export class EnemySystem {
         this.enterRecovery(enemy, attack);
         break;
     }
+  }
+
+  private enterStagger(enemy: Demon, attack: AttackDef): void {
+    enemy.state = 'staggered';
+    enemy.stateTimerMs = PARRY.STAGGER_DURATION_MS;
+    // Recover from stagger straight into the same cooldown the attack
+    // would have left behind — so a parried enemy is not immediately
+    // free to re-attack the moment stagger ends.
+    enemy.attackCooldownMs = attack.cooldownMs;
+    enemy.sprite.setFillStyle(PARRY.STAGGER_TINT_COLOR);
+  }
+
+  private exitStagger(enemy: Demon): void {
+    enemy.state = 'moving';
+    enemy.sprite.setFillStyle(enemy.def.bodyColor);
   }
 
   private tickStriking(enemy: Demon, deltaMs: number, dt: number): void {
@@ -304,6 +355,33 @@ export class EnemySystem {
       lob.damage,
       lob.projectileRadiusPx,
       lob.projectileColor,
+      lifetimeMs,
+    );
+  }
+
+  // Parry outcome for the Dancer's lob (HIT-THE-BEAT-SPEC §4): the
+  // projectile is sent back as damage. Implementation: fire a hunter-team
+  // projectile from the Dancer aimed AWAY from the would-be target, with
+  // a distinctive "reflected" colour so it reads as the player's. The
+  // lob never spawned as an enemy projectile, so there is nothing to
+  // re-team mid-flight — the redirect lives at strike-resolution.
+  private executeReflectedLob(enemy: Demon, lob: LobAttack): void {
+    const target = this.nearestHunter(enemy);
+    if (!target) return;
+    const dx = enemy.x - target.x;
+    const dy = enemy.y - target.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const vx = (dx / dist) * lob.projectileSpeedPxPerSec;
+    const vy = (dy / dist) * lob.projectileSpeedPxPerSec;
+    const lifetimeMs = (dist / lob.projectileSpeedPxPerSec) * 1000 * 1.6;
+    this.combat.spawnHunterProjectile(
+      enemy.x,
+      enemy.y,
+      vx,
+      vy,
+      lob.damage * PARRY.REFLECTED_PROJECTILE_DAMAGE_MULTIPLIER,
+      lob.projectileRadiusPx,
+      PARRY.REFLECTED_PROJECTILE_COLOR,
       lifetimeMs,
     );
   }
