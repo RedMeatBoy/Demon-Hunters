@@ -2,21 +2,27 @@ import Phaser from 'phaser';
 import { ARENA, COMBAT } from '../config/tuning';
 import type { Hunter } from '../entities/Hunter';
 import type { Target } from '../entities/Demon';
-import type { Projectile } from '../entities/Projectile';
+import type { Projectile, ProjectileTeam } from '../entities/Projectile';
 
-// CombatSystem — owns auto-attack behaviour for all hunters: nearest-enemy
-// targeting, the melee-arc and projectile attack code paths, hit detection,
-// damage, and clean death.
+// CombatSystem — owns damage exchange between hunters and targets.
+//
+// Hunter-side: auto-attack behaviour (nearest-target acquisition, the
+// melee-arc and projectile code paths), hit detection, damage, and
+// clean death.
+// Enemy-side: receives damage application calls from EnemySystem
+// (enemy contact + telegraphed attack damage to hunters), owns the
+// shared Projectile pool (hunter stars and enemy lobs both live here),
+// owns hit-flash visuals on both hunters and targets.
 //
 // Per CLAUDE.md ECS-flavored conventions: entities are dumb data; this
 // system operates on them. Per HUNTER-SPEC §5 + the combat brief:
 // per-hunter difference lives in `hunters.ts`; no `if (hunter.id === ...)`
-// here. Two code paths (melee-arc, projectile) selected on weapon kind,
-// both parameterised by the hunter's data.
+// here. Two hunter-attack code paths (melee-arc, projectile) selected on
+// weapon kind, both parameterised by the hunter's data.
 //
-// Co-op: the system iterates `hunters[]` exactly as the movement step does.
-// No P1/P2 branching. Each hunter independently picks its own nearest
-// target, on its own interval.
+// Co-op: the system iterates `hunters[]` exactly as the movement step
+// does. No P1/P2 branching. Each hunter independently picks its own
+// nearest target on its own interval.
 
 interface SwingVisual {
   remainingMs: number;
@@ -38,12 +44,55 @@ export class CombatSystem {
 
   update(deltaMs: number): void {
     for (const hunter of this.hunters) {
+      if (!hunter.alive) continue;
       this.tickHunter(hunter, deltaMs);
     }
     this.tickProjectiles(deltaMs);
-    this.tickFlashes(deltaMs);
+    this.tickTargetFlashes(deltaMs);
+    this.tickHunterFlashes(deltaMs);
     this.tickSwingVisuals(deltaMs);
     this.pruneDeadTargets();
+  }
+
+  // EnemySystem entry point: a telegraphed-attack or contact hit on a
+  // hunter. HP is subtracted here so the flash + zero-HP path live in
+  // one place.
+  applyHitToHunter(hunter: Hunter, damage: number): void {
+    if (!hunter.alive) return;
+    hunter.hp -= damage;
+    hunter.flashRemainingMs = COMBAT.HIT_FLASH_MS;
+    hunter.sprite.setFillStyle(COMBAT.HIT_FLASH_COLOR);
+    if (hunter.hp <= 0) {
+      this.killHunter(hunter);
+    }
+  }
+
+  // EnemySystem entry point: spawn an enemy projectile (the Dancer lob)
+  // into the shared projectile pool. Hunter-side projectiles use the
+  // same pool with team === 'hunter'.
+  spawnEnemyProjectile(
+    x: number,
+    y: number,
+    vx: number,
+    vy: number,
+    damage: number,
+    radius: number,
+    color: number,
+    lifetimeMs: number,
+  ): void {
+    const sprite = this.scene.add.circle(x, y, radius, color);
+    this.projectiles.push({
+      team: 'enemy',
+      x,
+      y,
+      vx,
+      vy,
+      damage,
+      remainingLifetimeMs: lifetimeMs,
+      radius,
+      alive: true,
+      sprite,
+    });
   }
 
   private tickHunter(hunter: Hunter, deltaMs: number): void {
@@ -92,12 +141,11 @@ export class CombatSystem {
       const dx = target.x - hunter.x;
       const dy = target.y - hunter.y;
       const dist = Math.hypot(dx, dy);
-      // Inclusive: a target touching the swing edge still gets hit.
       if (dist > range + target.radius) continue;
       const angleToTarget = Math.atan2(dy, dx);
       const angleDelta = Math.abs(Phaser.Math.Angle.Wrap(angleToTarget - facingAngle));
       if (angleDelta > halfAngle) continue;
-      this.applyHit(target, damage);
+      this.applyHitToTarget(target, damage);
     }
 
     this.spawnSwingVisual(hunter, facingAngle, range);
@@ -119,6 +167,7 @@ export class CombatSystem {
     );
 
     const projectile: Projectile = {
+      team: 'hunter',
       x: hunter.x,
       y: hunter.y,
       vx,
@@ -149,20 +198,13 @@ export class CombatSystem {
         continue;
       }
 
-      // First-overlap hit: a projectile damages the first alive target it
-      // touches and despawns. No piercing in this brief.
-      for (const target of this.targets) {
-        if (!target.alive) continue;
-        const dx = target.x - p.x;
-        const dy = target.y - p.y;
-        if (Math.hypot(dx, dy) > target.radius + p.radius) continue;
-        this.applyHit(target, p.damage);
+      // First-overlap hit against the projectile's opposing team.
+      if (this.hitProjectile(p)) {
         this.killProjectile(p);
-        break;
       }
     }
 
-    // Compact the array in-place rather than splicing during iteration.
+    // Compact in-place.
     let write = 0;
     for (let read = 0; read < this.projectiles.length; read++) {
       if (this.projectiles[read].alive) {
@@ -172,18 +214,38 @@ export class CombatSystem {
     this.projectiles.length = write;
   }
 
+  // Returns true if the projectile hit and should despawn.
+  private hitProjectile(p: Projectile): boolean {
+    const team: ProjectileTeam = p.team;
+    if (team === 'hunter') {
+      for (const target of this.targets) {
+        if (!target.alive) continue;
+        if (Math.hypot(target.x - p.x, target.y - p.y) > target.radius + p.radius) continue;
+        this.applyHitToTarget(target, p.damage);
+        return true;
+      }
+    } else {
+      for (const hunter of this.hunters) {
+        if (!hunter.alive) continue;
+        // Hunter hit radius approximates the square as a circle around its centre.
+        const hunterRadius = hunter.sprite.width / 2;
+        if (Math.hypot(hunter.x - p.x, hunter.y - p.y) > hunterRadius + p.radius) continue;
+        this.applyHitToHunter(hunter, p.damage);
+        return true;
+      }
+    }
+    return false;
+  }
+
   private killProjectile(p: Projectile): void {
     if (!p.alive) return;
     p.alive = false;
     p.sprite.destroy();
   }
 
-  private applyHit(target: Target, damage: number): void {
+  private applyHitToTarget(target: Target, damage: number): void {
     if (!target.alive) return;
     target.hp -= damage;
-    // Minimal hit feedback (the brief's §5): a brief tint flash. The juice
-    // pass — shake, hitstop, particles, floating numbers, combo — is a
-    // dedicated later brief.
     target.flashRemainingMs = COMBAT.HIT_FLASH_MS;
     target.sprite.setFillStyle(COMBAT.HIT_FLASH_COLOR);
 
@@ -199,6 +261,16 @@ export class CombatSystem {
     target.sprite.destroy();
   }
 
+  private killHunter(hunter: Hunter): void {
+    if (!hunter.alive) return;
+    hunter.alive = false;
+    hunter.hp = 0;
+    // Minimal handling per ENEMY-BRIEF §5: hide the sprite, don't destroy
+    // (so any in-flight references stay stable), don't build a death
+    // animation or run-end flow. RunDirector / run-flow is a later brief.
+    hunter.sprite.setVisible(false);
+  }
+
   private pruneDeadTargets(): void {
     let write = 0;
     for (let read = 0; read < this.targets.length; read++) {
@@ -209,13 +281,24 @@ export class CombatSystem {
     this.targets.length = write;
   }
 
-  private tickFlashes(deltaMs: number): void {
+  private tickTargetFlashes(deltaMs: number): void {
     for (const target of this.targets) {
       if (!target.alive) continue;
       if (target.flashRemainingMs <= 0) continue;
       target.flashRemainingMs -= deltaMs;
       if (target.flashRemainingMs <= 0) {
         target.sprite.setFillStyle(target.baseColor);
+      }
+    }
+  }
+
+  private tickHunterFlashes(deltaMs: number): void {
+    for (const hunter of this.hunters) {
+      if (!hunter.alive) continue;
+      if (hunter.flashRemainingMs <= 0) continue;
+      hunter.flashRemainingMs -= deltaMs;
+      if (hunter.flashRemainingMs <= 0) {
+        hunter.sprite.setFillStyle(hunter.baseColor);
       }
     }
   }
@@ -254,8 +337,6 @@ export class CombatSystem {
       const dx = target.x - hunter.x;
       const dy = target.y - hunter.y;
       const dist = Math.hypot(dx, dy);
-      // Range is centre-to-centre + the target's hit radius so a target
-      // touching the range edge still counts.
       if (dist > range + target.radius) continue;
       if (dist < nearestDist) {
         nearest = target;
