@@ -83,6 +83,7 @@ lesson transfers.
 │   ├── /systems
 │   │   ├── InputSystem.ts      ← the ONLY place raw keyboard is read
 │   │   ├── SpawnSystem.ts      ← waves, escalation, the elite beat
+│   │   ├── EnemySystem.ts      ← enemy movement, state machines, attack triggers
 │   │   ├── CombatSystem.ts     ← auto-attack, hit detection
 │   │   ├── ParrySystem.ts      ← "Hit the Beat": timing windows, Hype meter, signature powers
 │   │   ├── UpgradeSystem.ts    ← the 1-of-3 verse picks
@@ -258,11 +259,14 @@ worktrees during Prototype #1.
 
 ---
 
-<!-- CLAUDE.md v1.0 — Demon Hunters (working title). Repo standing orders for Claude Code:
+<!-- CLAUDE.md v1.1 — Demon Hunters (working title). Repo standing orders for Claude Code:
 project summary, required reading order (DESIGN-PILLARS.md → PROTOTYPE-SCOPE.md → this
 file), locked tech stack (Phaser 3 / TypeScript / Vite), full file structure, coding
 conventions (ECS-flavored, content-as-data, abstracted input, tuning.ts discipline), the
 locked two-player co-op control mapping, scope/commit/playtest discipline, and the
 lighter-ceremony Chat-then-Code workflow note. The original demon-hunters.html is retained
-as a reference artifact for the audio port and juice feel only. Co-authored: Brad + Claude
+as a reference artifact for the audio port and juice feel only. v1.1 amendment: added
+EnemySystem.ts to the file structure (enemy movement, state machines, attack triggers) —
+introduced during the enemy archetypes build (step 4) and ratified in chat, as the enemy
+behavior code belongs neither in SpawnSystem nor CombatSystem. Co-authored: Brad + Claude
 Chat. -->

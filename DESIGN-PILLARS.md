@@ -73,10 +73,11 @@ not just a number that goes up.
 ### Pillar 4 — Characters worth caring about
 
 Three hunters, each with a genuinely different feel in the hands — not three reskins with
-different stat lines. The melee lead plays close and brave; the rhythm hunter drives from
-range; the harmony hunter shapes space. Meta-progression is about *who* you have played
-and *what they contributed* — not an abstract upgrade tree. You should have a favorite,
-and your kid should have a different one.
+different stat lines. The lead is the honest baseline; the bruiser plays slow and heavy
+and rewards standing your ground; the kiter plays fast and far and rewards never being
+cornered. Meta-progression is about *who* you have played and *what they contributed* —
+not an abstract upgrade tree. You should have a favorite, and your kid should have a
+different one.
 
 **Test:** *Do two players, asked who they want to play, give different answers — and have
 reasons?*
@@ -129,13 +130,18 @@ well *is* writing the song.
 Three hunters. The names below are **working drafts** — they may be renamed, possibly with
 the kids. The *feel* and *song-line* assignments are the load-bearing part.
 
-| Hunter (draft name) | Feel                                          | Range             | Song-line   |
-|---------------------|-----------------------------------------------|-------------------|-------------|
-| Riya                | The lead — close, brave, sword-dance          | Melee arc         | **Melody**  |
-| Bex                 | The beat — driving, kinetic, fires from back  | Ranged projectile | **Rhythm**  |
-| Nim                 | The quiet one — shaman-leaning, shapes arena  | Zone / area       | **Harmony** |
+| Hunter (draft name) | Feel                                              | Weapon         | Song-line   |
+|---------------------|---------------------------------------------------|----------------|-------------|
+| Riya                | The lead — the honest baseline, no spike, no hole | Sword          | **Melody**  |
+| Bex                 | The bruiser — slow and heavy, stand and delete    | Staff          | **Rhythm**  |
+| Nim                 | The kiter — fast and far, hits light, never cornered | Throwing stars | **Harmony** |
 
 Three voices make a song. That is both the fiction and the meta-progression structure.
+
+The hunters differ in *what they do* — auto-attack and signature power — not in the
+*body*. Base stats (health, move speed) are identical; differentiation lives entirely in
+the verb. Per-hunter base stats are a parked full-game lever, not a prototype feature. See
+`HUNTER-SPEC.md` for the auto-attack triangle and the three signature powers.
 
 ---
 
@@ -210,9 +216,11 @@ silently decided.
 
 ---
 
-<!-- DESIGN-PILLARS.md v1.0 — Demon Hunters (working title). Establishes the full-game
+<!-- DESIGN-PILLARS.md v1.1 — Demon Hunters (working title). Establishes the full-game
 vision: five pillars, the three-inspiration fusion (Vampire Survivors / Hades / K-Pop
 Demon Hunters), the "Hit the Beat" parry verb, the three-hunter cast, song-based
-meta-progression, and 10 full-game open questions. Subordinate documents: PROTOTYPE-SCOPE.md
-(the prototype scope), CLAUDE.md (repo standing orders — next deliverable). Co-authored:
-Brad + Claude Chat. -->
+meta-progression, and 10 full-game open questions. v1.1 amendment: cast table and Pillar 4
+updated to the bruiser/kiter hunter identities (Riya/sword/baseline, Bex/staff/bruiser,
+Nim/stars/kiter) to match HUNTER-SPEC.md; noted that base stats are identical across
+hunters. Subordinate documents: PROTOTYPE-SCOPE.md, CLAUDE.md, and the specs in /specs
+(HIT-THE-BEAT-SPEC, HUNTER-SPEC). Co-authored: Brad + Claude Chat. -->
