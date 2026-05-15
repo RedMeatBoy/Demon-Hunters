@@ -5,28 +5,40 @@ import { InputSystem } from '../systems/InputSystem';
 import { CombatSystem } from '../systems/CombatSystem';
 import { EnemySystem } from '../systems/EnemySystem';
 import { SpawnSystem } from '../systems/SpawnSystem';
+import { ParrySystem } from '../systems/ParrySystem';
+import { HypeHud } from '../systems/HypeHud';
 import type { Hunter, HunterId } from '../entities/Hunter';
 import type { Demon } from '../entities/Demon';
 
 // The horde run itself. Wires the fixed-wide camera, InputSystem, the
-// hunters (with their per-slot HunterDef from tuning.ts), and the three
+// hunters (with their per-slot HunterDef from tuning.ts), and the
 // runtime systems: SpawnSystem feeds new enemies in from the edges,
-// EnemySystem ticks their movement + state machine, CombatSystem
+// EnemySystem ticks their movement + state machine, ParrySystem
+// resolves Hit-the-Beat presses against open windows, CombatSystem
 // resolves damage in both directions and owns the shared projectile
-// pool.
+// pool, and HypeHud renders per-player meter state.
 //
 // Update order:
 //   1. Hunter movement (intent → position)
 //   2. SpawnSystem    (push new Demon into the shared enemies array)
-//   3. EnemySystem    (move enemies, advance attack state machines,
-//                      apply contact/strike damage via CombatSystem)
-//   4. CombatSystem   (tick hunter auto-attacks, projectiles, flashes,
+//   3. ParrySystem    (read parry presses, resolve against any open
+//                      windup window, set parriedThisAttack flag —
+//                      runs BEFORE EnemySystem so a press on the very
+//                      last frame of a window is honoured by the same
+//                      frame's endWindup transition)
+//   4. EnemySystem    (move enemies, advance attack state machines,
+//                      apply contact/strike damage via CombatSystem;
+//                      endWindup reads the parried flag here)
+//   5. CombatSystem   (tick hunter auto-attacks, projectiles, flashes,
 //                      prune dead targets)
+//   6. HypeHud        (read fresh hype state, render bars)
 export class RunScene extends Phaser.Scene {
   private inputSystem!: InputSystem;
   private combatSystem!: CombatSystem;
   private enemySystem!: EnemySystem;
   private spawnSystem!: SpawnSystem;
+  private parrySystem!: ParrySystem;
+  private hypeHud!: HypeHud;
   private readonly hunters: Hunter[] = [];
   private readonly enemies: Demon[] = [];
 
@@ -48,6 +60,8 @@ export class RunScene extends Phaser.Scene {
     this.combatSystem = new CombatSystem(this, this.hunters, this.enemies);
     this.enemySystem = new EnemySystem(this, this.enemies, this.hunters, this.combatSystem);
     this.spawnSystem = new SpawnSystem(this, this.enemies);
+    this.parrySystem = new ParrySystem(this, this.hunters, this.enemies, this.inputSystem);
+    this.hypeHud = new HypeHud(this, this.hunters, this.parrySystem);
   }
 
   update(_time: number, deltaMs: number): void {
@@ -58,8 +72,10 @@ export class RunScene extends Phaser.Scene {
       this.applyMovement(hunter, intent.move.x, intent.move.y, dt);
     }
     this.spawnSystem.update(deltaMs);
+    this.parrySystem.update(deltaMs);
     this.enemySystem.update(deltaMs);
     this.combatSystem.update(deltaMs);
+    this.hypeHud.update();
   }
 
   private spawnHunter(id: HunterId, x: number, y: number): Hunter {
