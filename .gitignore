@@ -4,3 +4,5 @@ dist/
 *.log
 .DS_Store
 *.local
+# WSL sidecar metadata for files coming from a Windows host.
+*:Zone.Identifier
