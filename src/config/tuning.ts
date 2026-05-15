@@ -166,6 +166,107 @@ export const ATTACK = {
   BOUNCER_SLAM_VISUAL_LINGER_MS: 220,
 } as const;
 
+// HIT THE BEAT — the parry layer. HIT-THE-BEAT-SPEC §3, §5, §9.
+// Per PARRY-BRIEF §3, all three window widths live here as data; the
+// widest is hardcoded active for this brief. The difficulty selector
+// is deferred to a menu brief.
+export const PARRY = {
+  // §3 — three difficulty tiers (Soundcheck / Opening Act / Headliner).
+  // All three live here so swapping is one constant change for feel-tests.
+  WINDOW_WIDEST_MS: 280,
+  WINDOW_MEDIUM_MS: 200,
+  WINDOW_NARROWEST_MS: 140,
+  // The active window — widest tier hardcoded for this brief. Kids-first;
+  // the first playtest of parry should err generous.
+  ACTIVE_WINDOW_MS: 280,
+
+  // §3 — anti-mash. Must stay shorter than the shortest attack windup so
+  // a press is never "stuck" through a telegraph; enforced by an
+  // assertion in ParrySystem's constructor.
+  LOCKOUT_MS: 250,
+
+  // §5 — per-player Hype. PROVISIONAL: tuned so a competent run reaches
+  // full once or twice across its length. Real numbers move in playtest.
+  HYPE_CAPACITY: 100,
+  // Precision-graded fill: dead-on-beat banks max; window-edge banks min.
+  // Linear interpolation between the two; the curve shape itself is
+  // tunable later.
+  HYPE_PER_PARRY_MAX_AT_CENTER: 35,
+  HYPE_PER_PARRY_MIN_AT_EDGE: 12,
+
+  // §1.6 — the in-encounter payoff. Generous enough to feel like a real
+  // opening for hunter auto-attacks.
+  STAGGER_DURATION_MS: 1500,
+  // Stagger tint — unmistakable: the enemy reads as "stunned, hit me".
+  // Pale lavender against the dark canvas + saturated body colours.
+  STAGGER_TINT_COLOR: 0xE8E4FF,
+
+  // Beat Ring telegraph visual — HIT-THE-BEAT-SPEC §2. Contracts from
+  // OUTER → INNER over the visible windup (attack.windupMs).
+  BEAT_RING_OUTER_RADIUS_PX: 70,
+  BEAT_RING_INNER_RADIUS_PX: 16,
+  BEAT_RING_LINE_WIDTH_PX: 4,
+  BEAT_RING_COLOR: 0xF6E5B7,
+  BEAT_RING_ALPHA: 0.95,
+  // After convergence (the late half of the parry window) the ring stays
+  // pinned at INNER. A second brighter ring fires at the beat moment to
+  // mark "the beat" with shape, not just colour.
+  BEAT_FLASH_RADIUS_PX: 28,
+  BEAT_FLASH_LINE_WIDTH_PX: 3,
+  BEAT_FLASH_COLOR: 0xFFFFFF,
+  BEAT_FLASH_DURATION_MS: 180,
+
+  // Minimal hit feedback (brief §9). Visible flash at the attack-resolution
+  // point on a successful parry. Hitstop / shake / sound deferred to the
+  // juice and audio briefs — known shortcoming called out in the brief.
+  HIT_FLASH_RADIUS_PX: 38,
+  HIT_FLASH_DURATION_MS: 220,
+  HIT_FLASH_COLOR: 0xFFFFFF,
+  HIT_FLASH_ALPHA: 0.75,
+
+  // Reflected projectile (§4). Damage matches the source lob so the
+  // reflected shot reads as "their attack, sent back". Colour shifts to
+  // the hunter-team tint so it is unmistakably "yours now".
+  REFLECTED_PROJECTILE_DAMAGE_MULTIPLIER: 1.0,
+  REFLECTED_PROJECTILE_COLOR: 0xF6E5B7,
+} as const;
+
+// HUD — the Hype meter, the only HUD this brief adds. Two per-player
+// bars, position-anchored to the corner matching the player's side of
+// the keyboard so the mapping reads at a glance.
+export const HUD = {
+  HYPE_BAR_WIDTH_PX: 220,
+  HYPE_BAR_HEIGHT_PX: 16,
+  HYPE_BAR_PADDING_PX: 18,
+  HYPE_BAR_BACKGROUND_COLOR: 0x202836,
+  HYPE_BAR_BACKGROUND_ALPHA: 0.85,
+  // White overlay on top of the fill — alpha pulses on parry, intensity
+  // scales with precision. This is the precision-grade feedback channel
+  // (brief §6: "center-of-window has a bigger jump than an edge parry").
+  HYPE_BAR_FILL_FLASH_DURATION_MS: 260,
+  HYPE_BAR_FULL_FLASH_COLOR: 0xFFFFFF,
+  // Subtle full-meter glow so the player can tell at a glance the next
+  // parry will fire the signature.
+  HYPE_BAR_FULL_BORDER_COLOR: 0xFFFFFF,
+  HYPE_BAR_FULL_BORDER_PX: 2,
+  // Per-player label.
+  HYPE_BAR_LABEL_FONT_PX: 14,
+  HYPE_BAR_LABEL_COLOR: '#F6E5B7',
+  HYPE_BAR_LABEL_READY_COLOR: '#FFFFFF',
+
+  // Signature trigger placeholder (brief §7) — burst + name label
+  // centered on the hunter. No damage, no buff: proves the trigger fires
+  // at the right moment for the right hunter.
+  SIGNATURE_FLASH_RADIUS_PX: 96,
+  SIGNATURE_FLASH_DURATION_MS: 520,
+  SIGNATURE_FLASH_COLOR: 0xFFFFFF,
+  SIGNATURE_FLASH_ALPHA: 0.55,
+  SIGNATURE_LABEL_DURATION_MS: 900,
+  SIGNATURE_LABEL_FONT_PX: 36,
+  SIGNATURE_LABEL_COLOR: '#FFFFFF',
+  SIGNATURE_LABEL_RISE_PX: 28,
+} as const;
+
 // SpawnSystem — escalating edge spawns. Not RunDirector; that brief
 // drives the run arc (intro/build/drop/headliner) later. Here it is a
 // simple time-based trickle that intensifies.
