@@ -53,10 +53,26 @@ export class HypeHud {
       e.flash.width = filledWidth;
       e.flash.setAlpha(this.parry.getHypeFlashAlpha(e.hunter.id));
 
+      // Full-meter "ready" state (PARRY-V2-BRIEF §7): the next charged
+      // release fires the signature. Make it unmistakable so the player
+      // never wastes a full meter on a routine charge — the fill swaps
+      // to a warm colour and the full border pulses.
       const ready = fraction >= 1.0;
       e.fullBorder.setVisible(ready);
       e.label.setText(ready ? `${e.hunter.def.name} — READY` : e.hunter.def.name);
       e.label.setColor(ready ? HUD.HYPE_BAR_LABEL_READY_COLOR : HUD.HYPE_BAR_LABEL_COLOR);
+
+      if (ready) {
+        e.fill.setFillStyle(HUD.HYPE_BAR_READY_FILL_COLOR);
+        const phase =
+          (this.scene.time.now / 1000) * HUD.HYPE_BAR_READY_PULSE_HZ * Math.PI * 2;
+        const t = (Math.sin(phase) + 1) / 2;
+        e.fullBorder.setAlpha(
+          lerp(HUD.HYPE_BAR_READY_PULSE_MIN_ALPHA, HUD.HYPE_BAR_READY_PULSE_MAX_ALPHA, t),
+        );
+      } else {
+        e.fill.setFillStyle(e.hunter.def.bodyColor);
+      }
     }
   }
 
@@ -118,6 +134,10 @@ export class HypeHud {
     }
     this.entries.length = 0;
   }
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
 }
 
 function cornerForPlayer(id: HunterId): { x: number; y: number } {
