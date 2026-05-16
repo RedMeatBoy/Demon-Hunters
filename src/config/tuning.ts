@@ -231,6 +231,37 @@ export const PARRY = {
   REFLECTED_PROJECTILE_COLOR: 0xF6E5B7,
 } as const;
 
+// CHARGED RELEASE — the v2.0 hold-and-release verb (HIT-THE-BEAT-SPEC
+// v2.0 §3, §6). Holding the parry button pauses the hunter's auto-attack
+// and charges a per-character AOE; releasing fires it. The per-hunter
+// AOE shape / size / damage multiplier are content and live in
+// hunters.ts (HUNTER-SPEC §5); the shared dials live here.
+export const CHARGED = {
+  // §3 — the anti-spam invariant. A release before this much continuous
+  // holding is a silent cancel (no attack, no penalty). Replaces v1.0's
+  // post-press lockout. Asserted in ParrySystem against the shortest
+  // attack windup so a player can always react-and-hold inside a tell.
+  MINIMUM_HOLD_MS: 500,
+
+  // Charged-stance indicator — a ground ring under a hunter who is
+  // holding (§3, §8: the hold must be unmistakable, to the player and to
+  // a co-op partner). Bright cyan, deliberately NOT the lavender
+  // PARRY.STAGGER_TINT_COLOR, so a charging hunter never reads as a
+  // staggered enemy.
+  STANCE_RING_RADIUS_PX: 27,
+  STANCE_RING_LINE_WIDTH_PX: 3,
+  STANCE_RING_COLOR: 0x66E0FF,
+  STANCE_RING_ALPHA: 0.9,
+  STANCE_RING_PULSE_HZ: 2.2,
+  STANCE_RING_PULSE_AMPLITUDE_PX: 5,
+
+  // Charged-AOE strike visual — a brief filled shape (wedge / circle /
+  // line) tinted the hunter's body colour, fading over this duration.
+  // Programmer-art: enough to read as a discrete attack moment.
+  AOE_VISUAL_DURATION_MS: 200,
+  AOE_VISUAL_FILL_ALPHA: 0.42,
+} as const;
+
 // HUD — the Hype meter, the only HUD this brief adds. Two per-player
 // bars, position-anchored to the corner matching the player's side of
 // the keyboard so the mapping reads at a glance.
@@ -253,6 +284,16 @@ export const HUD = {
   HYPE_BAR_LABEL_FONT_PX: 14,
   HYPE_BAR_LABEL_COLOR: '#F6E5B7',
   HYPE_BAR_LABEL_READY_COLOR: '#FFFFFF',
+
+  // Full-meter "ready" state (PARRY-V2-BRIEF §7). When Hype is full the
+  // next charged release fires the signature instead of a normal charge.
+  // The fill swaps to this warm colour and the full border pulses, so a
+  // full meter never mis-reads as a routine one — the player must not
+  // forget Hype is full and waste it on a plain charge.
+  HYPE_BAR_READY_FILL_COLOR: 0xFFE9A8,
+  HYPE_BAR_READY_PULSE_HZ: 2.4,
+  HYPE_BAR_READY_PULSE_MIN_ALPHA: 0.3,
+  HYPE_BAR_READY_PULSE_MAX_ALPHA: 1.0,
 
   // Signature trigger placeholder (brief §7) — burst + name label
   // centered on the hunter. No damage, no buff: proves the trigger fires
