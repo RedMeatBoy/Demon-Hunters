@@ -196,11 +196,11 @@ export class ParrySystem {
         this.spawnStanceRing(hunter, state);
       }
 
-      // Falling edge — the release resolves the verb. Detected here from
-      // the gesture state (holding) plus the key no longer being held;
-      // an explicit InputSystem release event replaces this in a
-      // follow-up commit.
-      if (state.holding && !intent.parryHeld) {
+      // Falling edge — the release resolves the verb. parryReleased is
+      // the precise one-frame edge; the !parryHeld term is a safety net
+      // for a release event missed to a window blur, so a hold can never
+      // wedge "stuck on".
+      if (state.holding && (intent.parryReleased || !intent.parryHeld)) {
         this.resolveRelease(hunter, state);
       }
     }

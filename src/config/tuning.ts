@@ -180,11 +180,6 @@ export const PARRY = {
   // the first playtest of parry should err generous.
   ACTIVE_WINDOW_MS: 280,
 
-  // §3 — anti-mash. Must stay shorter than the shortest attack windup so
-  // a press is never "stuck" through a telegraph; enforced by an
-  // assertion in ParrySystem's constructor.
-  LOCKOUT_MS: 250,
-
   // §5 — per-player Hype. PROVISIONAL: tuned so a competent run reaches
   // full once or twice across its length. Real numbers move in playtest.
   HYPE_CAPACITY: 100,

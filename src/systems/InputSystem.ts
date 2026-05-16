@@ -8,13 +8,19 @@ export interface MoveVector {
   readonly y: number;
 }
 
-// One intent per player per frame. Parry and dash fields are defined now
-// so the consumer surface is stable for the next tasks (the parry layer
-// per HIT-THE-BEAT-SPEC) — they are unconsumed in this task.
+// One intent per player per frame.
+//
+// The parry verb is hold-and-release (HIT-THE-BEAT-SPEC v2.0): `parryHeld`
+// is the level state ParrySystem and CombatSystem read every frame, and
+// `parryReleased` is the one-frame edge that marks "the player let go
+// this frame" — the moment the charged release resolves. The v1.0
+// edge-triggered `parryPressed` is gone; there is no on-press resolution
+// any more. The dash fields are defined for surface stability and remain
+// unconsumed for now.
 export interface PlayerIntent {
   readonly move: MoveVector;
   readonly parryHeld: boolean;
-  readonly parryPressed: boolean;
+  readonly parryReleased: boolean;
   readonly dashHeld: boolean;
   readonly dashPressed: boolean;
 }
@@ -32,12 +38,13 @@ interface PlayerBindings {
 // getIntent(playerId) — they never see a key. A future gamepad source is
 // additive: a new intent producer, same intent shape.
 //
-// Edge-triggered intents (parryPressed / dashPressed) self-clear via a
+// Edge-triggered intents (parryReleased / dashPressed) self-clear via a
 // POST_UPDATE listener — they are valid for exactly one frame after the
-// keydown, regardless of which or how many consumers read them.
+// keyup/keydown, regardless of which or how many consumers read them.
 export class InputSystem {
   private readonly held = new Set<string>();
   private readonly pressedThisFrame = new Set<string>();
+  private readonly releasedThisFrame = new Set<string>();
   private readonly bindingsByPlayer: Record<PlayerId, PlayerBindings>;
   private readonly ownedKeys: ReadonlySet<string>;
   private readonly scene: Phaser.Scene;
@@ -64,6 +71,7 @@ export class InputSystem {
       if (!this.ownedKeys.has(e.code)) return;
       e.preventDefault();
       this.held.delete(e.code);
+      this.releasedThisFrame.add(e.code);
     };
 
     window.addEventListener('keydown', this.onKeyDown);
@@ -94,7 +102,7 @@ export class InputSystem {
     return {
       move: { x, y },
       parryHeld: this.held.has(b.PARRY),
-      parryPressed: this.pressedThisFrame.has(b.PARRY),
+      parryReleased: this.releasedThisFrame.has(b.PARRY),
       dashHeld: this.held.has(b.DASH),
       dashPressed: this.pressedThisFrame.has(b.DASH),
     };
@@ -102,6 +110,7 @@ export class InputSystem {
 
   private clearEdgeIntents(): void {
     this.pressedThisFrame.clear();
+    this.releasedThisFrame.clear();
   }
 
   private destroy(): void {
@@ -110,5 +119,6 @@ export class InputSystem {
     this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.clearEdgeIntents, this);
     this.held.clear();
     this.pressedThisFrame.clear();
+    this.releasedThisFrame.clear();
   }
 }
