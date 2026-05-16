@@ -127,19 +127,35 @@ meter fills (HIT-THE-BEAT-SPEC §5). One of each *flavor* across the three —
 defensive, offensive, buff — so the hunters differ in **both** their
 moment-to-moment verb (§2) **and** their payoff moment.
 
-### The constraint this spec owns
+### The constraint this spec owns (v1.1: relaxed)
 
-HIT-THE-BEAT-SPEC §5 handed down a hard constraint and named this spec as its
-owner:
+HIT-THE-BEAT-SPEC.md §5 originally handed down a hard constraint, which v1.0 of
+this spec absorbed:
 
-> **Signature powers must be "always good to fire,"** because Hype auto-triggers
-> and the player does not choose the moment.
+> **(v1.0)** Signature powers must be "always good to fire," because Hype
+> auto-triggers and the player does not choose the moment.
 
-Every power below is designed to satisfy it. The test for each: *if this fires at
-the worst possible moment — player at full health, only one weak enemy onscreen —
-is it still fine? Never a downside, never a "wasted" feeling.* A power that fails
-that test does not ship; it gets redesigned, not given a manual trigger (manual
-trigger is a parked full-game question per HIT-THE-BEAT-SPEC §10).
+**That constraint relaxed in v1.1**, following HIT-THE-BEAT-SPEC v2.0. The
+signature is now **player-fired**: a full Hype meter primes the next charged
+release to fire the signature, and the player chooses when to release. The
+player picks the moment.
+
+The constraint becomes:
+
+> **(v1.1)** Signature powers must be **good to fire when the player chooses to
+> fire them.** They no longer need to be safely autofireable at arbitrary
+> moments.
+
+The test for each: *given that the player will fire this when they read the
+situation as right for it (a swarm closing, the boss in stagger, a clear lane
+to a Bouncer), does the effect deliver?* A signature can now be *situationally*
+peak rather than *universally* fine. It still must never feel *wasted* on a
+sensible read — but "sensible" is the player's call, not the system's.
+
+Every power below is designed against the v1.1 constraint. The v1.0 framing —
+"safe to autofire" — is preserved in the per-power notes for historical
+context and because it remains *sufficient* (a power that was always good to
+fire is also good when the player chooses); but it is no longer *required*.
 
 ### The three powers
 
@@ -149,26 +165,39 @@ trigger is a parked full-game question per HIT-THE-BEAT-SPEC §10).
 | Bex    | Offensive | "Drop"       | A large burst of damage — a single decisive hit on everything in a wide area in front of her. |
 | Nim    | Buff      | "Bridge"     | A short window (a few seconds) of greatly boosted attack speed — she becomes a fountain of stars. |
 
-**Why each satisfies "always good to fire":**
+**Why each is good when the player chooses to fire it (v1.1):**
 
-- **Riya — Breakdown (defensive).** Clearing space is never bad. At worst (one weak
-  enemy, full health) it is mildly redundant — but redundant is not a *downside*.
-  It never costs the player anything. Safe to autofire.
-- **Bex — Drop (offensive).** Free damage is never bad. At worst it overkills a
-  weak enemy — wasted potential, but not a loss. The player is never punished for
-  it landing. Safe to autofire.
-- **Nim — Bridge (buff).** A buff window with no cost and no downside. At worst the
-  extra fire rate has thin targets — again, redundant, not harmful. Safe to
-  autofire. (Design note: the buff is *attack speed* specifically because it
-  compounds Nim's existing identity — the kiter becomes an overwhelming kiter —
-  rather than papering over her weakness. It does not, for example, give her
-  Bex's damage. A signature should amplify identity, not erase it.)
+- **Riya — Breakdown (defensive).** Fired when surrounded, it's a panic-clear
+  with instant breathing room. Fired pre-emptively before a swarm closes, it
+  resets positioning. Even fired during a quiet moment, clearing space is never
+  bad — at worst mildly redundant, never a downside. (v1.0 framing — "safe to
+  autofire" — still holds.)
+- **Bex — Drop (offensive).** Fired into a cluster, it's huge damage. Fired
+  during a Bouncer's stagger window, it deletes the elite. Fired into thin air,
+  it overkills a weak enemy — wasted potential, but never a punish. (v1.0
+  framing still holds.)
+- **Nim — Bridge (buff).** Fired before a wave hits, the boosted fire rate
+  shreds the incoming density. Fired during a target-rich moment, she becomes
+  a fountain of stars. Fired in thin air, redundant but not harmful. (v1.0
+  framing still holds. Design note unchanged: the buff is *attack speed*
+  specifically because it compounds Nim's kiter identity — a signature should
+  amplify identity, not erase it.)
+
+A v1.1-only payoff: under the relaxed constraint, signatures *can* now be
+designed with more *situational* peak (e.g., a Bex Drop that scales with
+enemies-in-AOE, rewarding "fire it into a cluster") in the full game. Those
+designs are parked for the full game — the prototype's three signatures stay
+as above, since they already satisfy the stronger v1.0 constraint and don't
+need redesigning.
 
 ### Notes binding on implementation
 
-- Each power is **a discrete event**, fired by `ParrySystem` when Hype is full,
-  then Hype resets (HIT-THE-BEAT-SPEC §5). This spec does not own the trigger
-  plumbing — it owns what fires.
+- Each power is **a discrete event**, fired by `ParrySystem` when the player
+  releases the charge button at full Hype (HIT-THE-BEAT-SPEC v2.0 §4 Outcome
+  C), then Hype resets. This spec does not own the trigger plumbing — it owns
+  what fires.
+- The signature release **replaces** the normal charged AOE (Outcome A); it
+  does not stack with it. Per HIT-THE-BEAT-SPEC v2.0 §6.
 - Each power needs **unmistakable feedback** — a signature power going off is a
   peak spectacle moment (DESIGN-PILLARS Pillar 5). Big, loud, distinct per hunter.
   `FeedbackSystem` and `AudioSystem` own the execution; this spec just flags it is
@@ -218,15 +247,20 @@ Each hunter entry should express, at minimum:
 - Auto-attack: weapon kind (`sword` / `staff` / `stars` — i.e. melee-arc vs.
   projectile), and the three triangle values (attack interval, range, damage),
   ideally as the relative multipliers in §2 so the triangle stays readable.
+- **Charged AOE (v1.1, added with HIT-THE-BEAT-SPEC v2.0):** shape kind
+  (`wedge` / `radial` / `line`), shape parameters (radius, angle, length —
+  whichever apply), and damage multiplier off the hunter's normal hit damage.
+  See HIT-THE-BEAT-SPEC v2.0 §6 for the per-character shapes.
 - Signature: which power, expressed so `ParrySystem` can fire it without a
   `switch` on hunter id (a power identifier the systems resolve, not inline
   per-hunter logic).
 
 `CombatSystem` reads weapon-kind to decide melee-arc vs. projectile behavior — but
 the *behaviors themselves* are general (one melee-arc implementation, one
-projectile implementation), parameterized by the data. Per CLAUDE.md: if you find
-yourself writing `if (hunter.id === 'Riya')` inside a system, stop — that
-difference belongs in `hunters.ts`.
+projectile implementation, one charged-AOE implementation parameterized by
+shape kind), parameterized by the data. Per CLAUDE.md: if you find yourself
+writing `if (hunter.id === 'Riya')` inside a system, stop — that difference
+belongs in `hunters.ts`.
 
 The `Hunter` entity (`src/entities/Hunter.ts`) stays dumb data per CLAUDE.md — it
 already holds id + position + sprite from the scaffold. It may also hold a
@@ -286,16 +320,21 @@ Paper cannot resolve these. The kids' hands resolve them.
 
 ---
 
-<!-- HUNTER-SPEC.md v1.0 — Prototype #1, the three hunters. Locks: the cast and
+<!-- HUNTER-SPEC.md v1.1 — Prototype #1, the three hunters. Locks: the cast and
 weapon identities (Riya/sword/baseline, Bex/staff/bruiser, Nim/stars/kiter — with
 a matching DESIGN-PILLARS amendment); auto-attack via nearest-enemy targeting for
 all three; the rebalanced weapon triangle (each non-baseline hunter best at one
 axis, worst at one, none top-two on all — Bex owns damage, Nim owns range+speed,
 Riya all-medium); the three mixed-flavor signature powers (Riya defensive
-"Breakdown", Bex offensive "Drop", Nim buff "Bridge"); and ownership of
-HIT-THE-BEAT-SPEC's "signatures must be always-good-to-fire" constraint. Base
-stats identical across hunters (move speed equal is a hard kids-first line).
-Content lives as data in src/config/hunters.ts. Maps to hunters.ts +
-Hunter.ts; auto-attack impl deferred to the combat/enemy brief, signature trigger
-plumbing owned by ParrySystem. Subordinate to DESIGN-PILLARS.md,
-PROTOTYPE-SCOPE.md, CLAUDE.md. Co-authored: Brad + Claude Chat. -->
+"Breakdown", Bex offensive "Drop", Nim buff "Bridge"). Base stats identical
+across hunters (move speed equal is a hard kids-first line). Content lives as
+data in src/config/hunters.ts. Maps to hunters.ts + Hunter.ts; auto-attack impl
+done in the combat brief, signature trigger plumbing owned by ParrySystem.
+v1.1 amendment (parallel to HIT-THE-BEAT-SPEC v2.0): the "signatures must be
+always-good-to-fire" constraint relaxes to "signatures must be good when the
+player chooses to fire them," because the signature is now player-fired at full
+Hype rather than auto-triggered. The per-power notes still satisfy the stronger
+v1.0 framing — no power needs redesign. Charged-AOE data fields (shape kind,
+shape parameters, damage multiplier per HIT-THE-BEAT-SPEC v2.0 §6) added to the
+data shape (§5). Subordinate to DESIGN-PILLARS.md, PROTOTYPE-SCOPE.md, CLAUDE.md.
+Co-authored: Brad + Claude Chat. -->
