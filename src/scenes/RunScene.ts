@@ -57,7 +57,7 @@ export class RunScene extends Phaser.Scene {
     this.hunters.push(this.spawnHunter('P1', cx - HUNTER.SPAWN_OFFSET_X_PX, cy));
     this.hunters.push(this.spawnHunter('P2', cx + HUNTER.SPAWN_OFFSET_X_PX, cy));
 
-    this.combatSystem = new CombatSystem(this, this.hunters, this.enemies);
+    this.combatSystem = new CombatSystem(this, this.hunters, this.enemies, this.inputSystem);
     this.enemySystem = new EnemySystem(this, this.enemies, this.hunters, this.combatSystem);
     this.spawnSystem = new SpawnSystem(this, this.enemies);
     this.parrySystem = new ParrySystem(this, this.hunters, this.enemies, this.inputSystem);

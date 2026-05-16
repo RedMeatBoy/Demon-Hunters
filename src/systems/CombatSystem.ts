@@ -3,6 +3,7 @@ import { ARENA, COMBAT } from '../config/tuning';
 import type { Hunter } from '../entities/Hunter';
 import type { Target } from '../entities/Demon';
 import type { Projectile, ProjectileTeam } from '../entities/Projectile';
+import type { InputSystem } from './InputSystem';
 
 // CombatSystem — owns damage exchange between hunters and targets.
 //
@@ -33,13 +34,20 @@ export class CombatSystem {
   private readonly scene: Phaser.Scene;
   private readonly hunters: readonly Hunter[];
   private readonly targets: Target[];
+  private readonly input: InputSystem;
   private readonly projectiles: Projectile[] = [];
   private readonly swingVisuals: SwingVisual[] = [];
 
-  constructor(scene: Phaser.Scene, hunters: readonly Hunter[], targets: Target[]) {
+  constructor(
+    scene: Phaser.Scene,
+    hunters: readonly Hunter[],
+    targets: Target[],
+    input: InputSystem,
+  ) {
     this.scene = scene;
     this.hunters = hunters;
     this.targets = targets;
+    this.input = input;
   }
 
   update(deltaMs: number): void {
@@ -124,6 +132,14 @@ export class CombatSystem {
   }
 
   private tickHunter(hunter: Hunter, deltaMs: number): void {
+    // HIT-THE-BEAT-SPEC v2.0 §3, §1.3: while a hunter holds the parry/
+    // charge button, its auto-attack is suspended — that lost DPS is the
+    // verb's deliberate opportunity cost. Skip the whole tick: no
+    // cooldown decrement (so the attack picks up exactly where it left
+    // off on release, never building negative debt), no targeting, no
+    // fire. Per-hunter — one player's hold never pauses the other's.
+    if (this.input.getIntent(hunter.id).parryHeld) return;
+
     if (hunter.attackCooldownMs > 0) {
       hunter.attackCooldownMs -= deltaMs;
       if (hunter.attackCooldownMs > 0) return;
