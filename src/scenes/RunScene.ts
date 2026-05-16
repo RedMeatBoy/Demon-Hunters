@@ -13,19 +13,21 @@ import type { Demon } from '../entities/Demon';
 // The horde run itself. Wires the fixed-wide camera, InputSystem, the
 // hunters (with their per-slot HunterDef from tuning.ts), and the
 // runtime systems: SpawnSystem feeds new enemies in from the edges,
-// EnemySystem ticks their movement + state machine, ParrySystem
-// resolves Hit-the-Beat presses against open windows, CombatSystem
-// resolves damage in both directions and owns the shared projectile
-// pool, and HypeHud renders per-player meter state.
+// EnemySystem ticks their movement + state machine, ParrySystem runs the
+// Hit-the-Beat hold-and-release gesture, CombatSystem resolves damage in
+// both directions and owns the shared projectile pool, and HypeHud
+// renders per-player meter state.
 //
 // Update order:
 //   1. Hunter movement (intent → position)
 //   2. SpawnSystem    (push new Demon into the shared enemies array)
-//   3. ParrySystem    (read parry presses, resolve against any open
-//                      windup window, set parriedThisAttack flag —
-//                      runs BEFORE EnemySystem so a press on the very
-//                      last frame of a window is honoured by the same
-//                      frame's endWindup transition)
+//   3. ParrySystem    (run the hold/release gesture; on a charged
+//                      release, fire the charged AOE / signature and —
+//                      if a telegraphed attack is in its window — set
+//                      the parriedThisAttack flag. Runs BEFORE
+//                      EnemySystem so a release on the very last frame
+//                      of a window is honoured by the same frame's
+//                      endWindup transition)
 //   4. EnemySystem    (move enemies, advance attack state machines,
 //                      apply contact/strike damage via CombatSystem;
 //                      endWindup reads the parried flag here)
@@ -60,7 +62,13 @@ export class RunScene extends Phaser.Scene {
     this.combatSystem = new CombatSystem(this, this.hunters, this.enemies, this.inputSystem);
     this.enemySystem = new EnemySystem(this, this.enemies, this.hunters, this.combatSystem);
     this.spawnSystem = new SpawnSystem(this, this.enemies);
-    this.parrySystem = new ParrySystem(this, this.hunters, this.enemies, this.inputSystem);
+    this.parrySystem = new ParrySystem(
+      this,
+      this.hunters,
+      this.enemies,
+      this.inputSystem,
+      this.combatSystem,
+    );
     this.hypeHud = new HypeHud(this, this.hunters, this.parrySystem);
   }
 

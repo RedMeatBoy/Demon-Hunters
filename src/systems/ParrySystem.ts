@@ -1,30 +1,39 @@
 import Phaser from 'phaser';
-import { ATTACK, HUD, PARRY } from '../config/tuning';
+import { ATTACK, CHARGED, HUD, PARRY } from '../config/tuning';
 import type { AttackDef } from '../config/enemies';
 import type { Demon } from '../entities/Demon';
 import type { Hunter, HunterId } from '../entities/Hunter';
 import type { SignaturePowerId } from '../config/hunters';
+import type { CombatSystem } from './CombatSystem';
 import type { InputSystem } from './InputSystem';
 
-// ParrySystem — "Hit the Beat" (HIT-THE-BEAT-SPEC). Owns the parry verb:
-// reads parryPressed intents from InputSystem, resolves them against
-// the per-attack timing window EnemySystem opens during a telegraphed
-// windup, banks per-player Hype scaled by precision, and emits a
-// signature-trigger event when a player's Hype hits capacity.
+// ParrySystem — "Hit the Beat", v2.0 hold-and-release (HIT-THE-BEAT-SPEC
+// v2.0). Owns the parry verb as a gesture state machine:
 //
-// Coordination with EnemySystem: parryability is a data property on
-// enemy defs (def.telegraphed). EnemySystem extends the windup state
-// timer by half the active parry window so the strike resolves AFTER
-// the centered window closes — that lets ParrySystem set
-// parriedThisAttack on the enemy and EnemySystem honour it in
-// endWindup (negate+stagger for lunge/slam, reflect for lob). No
-// system branches on enemy id; the lunge/slam vs lob fork lives in
-// EnemySystem off attack.kind.
+//   - Holding the parry/charge button pauses the hunter's auto-attack
+//     (CombatSystem reads parryHeld and suspends) and enters a charged
+//     stance. ParrySystem records when the hold began.
+//   - Releasing resolves the verb. Below ~500ms held it is a silent
+//     cancel (Outcome D). At or above the minimum hold it is a charged
+//     release: the per-character charged AOE fires (Outcome A), with a
+//     parry layered on top if a telegraphed attack is in its window at
+//     the moment of release (Outcome B — reflect / negate+stagger,
+//     banks precision-graded Hype), or the signature firing instead of
+//     the charged AOE when Hype is full (Outcome C).
 //
-// Co-op: two players, two independent lockouts, two independent Hype
-// meters. Once an attack is claimed by a parry, subsequent presses on
-// the same attack are inert (HIT-THE-BEAT-SPEC §8: no cross-player
-// parry synergy in the prototype).
+// Coordination with EnemySystem (unchanged from v1.0): parryability is a
+// data property on enemy defs (def.telegraphed). EnemySystem extends the
+// windup state timer by half the active parry window so the strike
+// resolves AFTER the centered window closes — that lets ParrySystem set
+// parriedThisAttack on the enemy and EnemySystem honour it in endWindup
+// (negate+stagger for lunge/slam, reflect for lob). No system branches
+// on enemy id; the lunge/slam vs lob fork lives in EnemySystem off
+// attack.kind.
+//
+// Co-op: two players, two independent charged-stance states, two
+// independent Hype meters, two independent signature triggers. Once an
+// attack is claimed by a parry, a later release against the same attack
+// is inert (HIT-THE-BEAT-SPEC §9: no cross-player parry synergy).
 
 export const SIGNATURE_TRIGGERED = 'signature-triggered';
 
@@ -37,9 +46,17 @@ export interface SignatureTriggeredPayload {
 
 interface PlayerState {
   hype: number;
-  lockoutRemainingMs: number;
+  // Gesture state machine. `holding` is true between the rising edge of
+  // parryHeld and the release that resolves it; `holdStartMs` is the
+  // scene clock at the rising edge, so a release can measure hold
+  // duration against CHARGED.MINIMUM_HOLD_MS.
+  holding: boolean;
+  holdStartMs: number;
+  // The charged-stance ground ring shown while holding (HIT-THE-BEAT-SPEC
+  // v2.0 §3, §8). Null when not holding.
+  stanceRing: Phaser.GameObjects.Arc | null;
   // HUD feedback: bar pulses briefly after a parry; intensity scales
-  // with precision (HIT-THE-BEAT-SPEC §7).
+  // with precision (HIT-THE-BEAT-SPEC §5).
   hypeFlashRemainingMs: number;
   hypeFlashIntensity: number;
 }
@@ -64,10 +81,10 @@ interface FadingArc {
   readonly arc: Phaser.GameObjects.Arc;
 }
 
-// Signature trigger placeholder (PARRY-BRIEF §7). A burst + name label
-// centered on the hunter — proves wiring, does NOT damage / clear / buff.
-// The actual signature effects (Breakdown/Drop/Bridge) are the next
-// brief; the registry stays status: 'stub'.
+// Signature trigger placeholder (PARRY-V2-BRIEF §5). A burst + name
+// label centered on the hunter — proves wiring, does NOT damage / clear
+// / buff. The actual signature effects (Breakdown/Drop/Bridge) are the
+// next brief; the registry stays status: 'stub'.
 interface SignatureVisual {
   remainingMs: number;
   readonly durationMs: number;
@@ -85,6 +102,7 @@ export class ParrySystem {
   private readonly hunters: readonly Hunter[];
   private readonly enemies: readonly Demon[];
   private readonly input: InputSystem;
+  private readonly combat: CombatSystem;
   private readonly playerStates: Record<HunterId, PlayerState>;
   private readonly rings: BeatRing[] = [];
   private readonly flashes: FadingArc[] = [];
@@ -95,19 +113,20 @@ export class ParrySystem {
     hunters: readonly Hunter[],
     enemies: readonly Demon[],
     input: InputSystem,
+    combat: CombatSystem,
   ) {
-    // Hard invariant (HIT-THE-BEAT-SPEC §3, PARRY-BRIEF §3): the
-    // post-press lockout must be shorter than the shortest attack
-    // windup so a press is never "stuck" through a telegraph the
-    // player could otherwise have read. Enforce, do not assume.
+    // Sanity invariant (HIT-THE-BEAT-SPEC v2.0 §3): the minimum hold must
+    // be shorter than the shortest attack windup, or a player could
+    // never react to a telegraph and still complete the hold in time to
+    // parry it. Enforce, do not assume.
     const shortestWindupMs = Math.min(
       ATTACK.MOSHER_WINDUP_MS,
       ATTACK.DANCER_WINDUP_MS,
       ATTACK.BOUNCER_WINDUP_MS,
     );
-    if (PARRY.LOCKOUT_MS >= shortestWindupMs) {
+    if (CHARGED.MINIMUM_HOLD_MS >= shortestWindupMs) {
       throw new Error(
-        `PARRY.LOCKOUT_MS (${PARRY.LOCKOUT_MS}) must be shorter than the shortest attack windup (${shortestWindupMs}).`,
+        `CHARGED.MINIMUM_HOLD_MS (${CHARGED.MINIMUM_HOLD_MS}) must be shorter than the shortest attack windup (${shortestWindupMs}) so a player can react to a telegraph and still complete the hold.`,
       );
     }
 
@@ -115,6 +134,7 @@ export class ParrySystem {
     this.hunters = hunters;
     this.enemies = enemies;
     this.input = input;
+    this.combat = combat;
     this.playerStates = {
       P1: makePlayerState(),
       P2: makePlayerState(),
@@ -123,10 +143,11 @@ export class ParrySystem {
 
   update(deltaMs: number): void {
     this.tickPlayerStates(deltaMs);
+    this.tickGestures();
+    this.tickStanceRings();
     this.tickRings();
     this.tickFlashes(deltaMs);
     this.tickSignatureVisuals(deltaMs);
-    this.readPresses();
   }
 
   // --- HUD readers --------------------------------------------------------
@@ -148,43 +169,114 @@ export class ParrySystem {
   private tickPlayerStates(deltaMs: number): void {
     for (const id of HUNTER_IDS) {
       const s = this.playerStates[id];
-      if (s.lockoutRemainingMs > 0) s.lockoutRemainingMs -= deltaMs;
       if (s.hypeFlashRemainingMs > 0) s.hypeFlashRemainingMs -= deltaMs;
     }
   }
 
-  // --- Parry-press resolution --------------------------------------------
+  // --- Gesture state machine ---------------------------------------------
 
-  private readPresses(): void {
+  private tickGestures(): void {
     for (const hunter of this.hunters) {
-      if (!hunter.alive) continue;
+      const state = this.playerStates[hunter.id];
+
+      // A hunter that dies mid-hold drops the hold silently — no charged
+      // release, no parry, no cancel feedback.
+      if (!hunter.alive) {
+        if (state.holding) this.endHold(state);
+        continue;
+      }
+
       const intent = this.input.getIntent(hunter.id);
-      if (!intent.parryPressed) continue;
-      this.resolvePress(hunter);
+
+      // Rising edge — the hold begins. Auto-attack is already suspended
+      // by CombatSystem reading the same parryHeld state.
+      if (intent.parryHeld && !state.holding) {
+        state.holding = true;
+        state.holdStartMs = this.scene.time.now;
+        this.spawnStanceRing(hunter, state);
+      }
+
+      // Falling edge — the release resolves the verb. Detected here from
+      // the gesture state (holding) plus the key no longer being held;
+      // an explicit InputSystem release event replaces this in a
+      // follow-up commit.
+      if (state.holding && !intent.parryHeld) {
+        this.resolveRelease(hunter, state);
+      }
     }
   }
 
-  private resolvePress(hunter: Hunter): void {
-    const state = this.playerStates[hunter.id];
-    // Anti-mash, never punitive (HIT-THE-BEAT-SPEC §3). Any press during
-    // lockout is dropped — no inert flourish, no penalty, no extended
-    // lockout. Simply ignored.
-    if (state.lockoutRemainingMs > 0) return;
-    // Every press that gets past lockout — Hit, Miss, or Inert — starts
-    // a fresh lockout.
-    state.lockoutRemainingMs = PARRY.LOCKOUT_MS;
+  private resolveRelease(hunter: Hunter, state: PlayerState): void {
+    const holdMs = this.scene.time.now - state.holdStartMs;
+    this.endHold(state);
 
+    // Outcome D — a sub-minimum hold is a silent cancel. No charged
+    // attack, no parry, no penalty, no cooldown. Auto-attack resumes on
+    // CombatSystem's next tick automatically.
+    if (holdMs < CHARGED.MINIMUM_HOLD_MS) return;
+
+    // Resolve the §4 outcome matrix. The charged release is always
+    // *something*: either the signature (Hype full) or the plain charged
+    // AOE. A parry, if a telegraphed attack is in its window right now,
+    // layers on top of whichever fired.
     const target = this.findBestParryTarget(hunter);
-    if (!target) {
-      // Inert press. Lockout already started above.
-      return;
+    const hypeFull = state.hype >= PARRY.HYPE_CAPACITY;
+
+    if (hypeFull) {
+      // Outcome C — the signature fires instead of the plain charged AOE
+      // and Hype resets. If a parry also lands (C + B) the parry below
+      // banks Hype toward the next signature.
+      state.hype = 0;
+      this.fireSignature(hunter);
+    } else {
+      // Outcome A — the plain charged AOE. Most releases land here.
+      this.combat.fireChargedAoe(hunter);
     }
 
-    this.applyParry(target, hunter, state);
+    if (target) {
+      // Outcome B — parry effects layer on top of the charged release.
+      this.applyParry(target, hunter, state);
+    }
   }
+
+  private endHold(state: PlayerState): void {
+    state.holding = false;
+    if (state.stanceRing) {
+      state.stanceRing.destroy();
+      state.stanceRing = null;
+    }
+  }
+
+  // --- Charged-stance visual ---------------------------------------------
+
+  private spawnStanceRing(hunter: Hunter, state: PlayerState): void {
+    state.stanceRing = this.scene.add
+      .circle(hunter.x, hunter.y, CHARGED.STANCE_RING_RADIUS_PX, 0, 0)
+      .setStrokeStyle(
+        CHARGED.STANCE_RING_LINE_WIDTH_PX,
+        CHARGED.STANCE_RING_COLOR,
+        CHARGED.STANCE_RING_ALPHA,
+      )
+      .setDepth(45);
+  }
+
+  private tickStanceRings(): void {
+    const pulsePhase = (this.scene.time.now / 1000) * CHARGED.STANCE_RING_PULSE_HZ * Math.PI * 2;
+    const pulse = Math.sin(pulsePhase) * CHARGED.STANCE_RING_PULSE_AMPLITUDE_PX;
+    for (const hunter of this.hunters) {
+      const state = this.playerStates[hunter.id];
+      if (!state.holding || !state.stanceRing) continue;
+      // Track the hunter — they keep moving while charging — and pulse
+      // the radius so the stance reads as live, not a static decal.
+      state.stanceRing.setPosition(hunter.x, hunter.y);
+      state.stanceRing.setRadius(CHARGED.STANCE_RING_RADIUS_PX + pulse);
+    }
+  }
+
+  // --- Parry resolution --------------------------------------------------
 
   // Among enemies with an open parry window, pick the one nearest the
-  // pressing hunter. Natural co-op disambiguation (each player tends to
+  // releasing hunter. Natural co-op disambiguation (each player tends to
   // parry what is coming at them) and stable in a move-only game where
   // there is no "facing" to read from.
   private findBestParryTarget(hunter: Hunter): Demon | null {
@@ -221,16 +313,14 @@ export class ParrySystem {
     // (lob, no stagger) restores its base colour on recovery anyway.
     enemy.sprite.setFillStyle(PARRY.STAGGER_TINT_COLOR);
 
-    state.hype += hypeGained;
+    // Bank Hype. v2.0: no auto-fire when the meter caps — a full meter is
+    // just a condition the next release reads (Outcome C). Clamp at
+    // capacity so a C+B release banks cleanly toward the next signature.
+    state.hype = Math.min(PARRY.HYPE_CAPACITY, state.hype + hypeGained);
     state.hypeFlashRemainingMs = HUD.HYPE_BAR_FILL_FLASH_DURATION_MS;
     state.hypeFlashIntensity = precision;
 
     this.spawnParryHitVisual(enemy.x, enemy.y);
-
-    if (state.hype >= PARRY.HYPE_CAPACITY) {
-      state.hype = 0;
-      this.fireSignature(hunter);
-    }
   }
 
   // --- Signature trigger --------------------------------------------------
@@ -432,7 +522,9 @@ export class ParrySystem {
 function makePlayerState(): PlayerState {
   return {
     hype: 0,
-    lockoutRemainingMs: 0,
+    holding: false,
+    holdStartMs: 0,
+    stanceRing: null,
     hypeFlashRemainingMs: 0,
     hypeFlashIntensity: 0,
   };
@@ -471,7 +563,7 @@ function lerp(a: number, b: number, t: number): number {
 }
 
 function signatureLabel(id: SignaturePowerId): string {
-  // Placeholder labels for the trigger wiring (PARRY-BRIEF §7). The
+  // Placeholder labels for the trigger wiring (PARRY-V2-BRIEF §5). The
   // SIGNATURE_POWERS registry stays status: 'stub' — the actual
   // signature effects (Breakdown/Drop/Bridge) ship in the next brief.
   switch (id) {
