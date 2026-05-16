@@ -19,6 +19,12 @@ export interface Hunter {
   readonly def: HunterDef;
   x: number;
   y: number;
+  // Last non-zero movement direction, kept as a unit vector. Updated by
+  // the movement step; read by the charged-AOE behaviour (HIT-THE-BEAT-
+  // SPEC v2.0 §6) to aim Riya's wedge and Nim's line. Move-only game —
+  // there is no separate facing input.
+  facingX: number;
+  facingY: number;
   readonly sprite: Phaser.GameObjects.Rectangle;
   attackCooldownMs: number;
   hp: number;

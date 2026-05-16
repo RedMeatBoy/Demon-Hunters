@@ -86,6 +86,10 @@ export class RunScene extends Phaser.Scene {
       def,
       x,
       y,
+      // Start facing toward arena centre (P1 spawns left, P2 right) so a
+      // charged release fired before the hunter ever moves aims inward.
+      facingX: x < ARENA.WIDTH / 2 ? 1 : -1,
+      facingY: 0,
       sprite,
       attackCooldownMs: 0,
       hp: HUNTER.MAX_HP,
@@ -97,6 +101,13 @@ export class RunScene extends Phaser.Scene {
   }
 
   private applyMovement(h: Hunter, mx: number, my: number, dt: number): void {
+    // Track facing from the move intent — the intent vector is already
+    // unit-length (InputSystem normalises diagonals). A stationary
+    // hunter keeps its last facing.
+    if (mx !== 0 || my !== 0) {
+      h.facingX = mx;
+      h.facingY = my;
+    }
     h.x += mx * HUNTER.MOVE_SPEED_PX_PER_SEC * dt;
     h.y += my * HUNTER.MOVE_SPEED_PX_PER_SEC * dt;
     const half = HUNTER.SQUARE_SIZE_PX / 2;

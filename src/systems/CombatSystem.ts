@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
-import { ARENA, COMBAT } from '../config/tuning';
+import { ARENA, CHARGED, COMBAT } from '../config/tuning';
 import type { Hunter } from '../entities/Hunter';
+import type { LineAoe, RadialAoe, WedgeAoe } from '../config/hunters';
 import type { Target } from '../entities/Demon';
 import type { Projectile, ProjectileTeam } from '../entities/Projectile';
 import type { InputSystem } from './InputSystem';
@@ -30,6 +31,15 @@ interface SwingVisual {
   readonly graphics: Phaser.GameObjects.Graphics;
 }
 
+// Charged-AOE strike visual — a filled shape that fades over its
+// lifetime (the auto-attack swing visual does not fade; the charged
+// release wants a heavier, more deliberate read).
+interface ChargedVisual {
+  remainingMs: number;
+  readonly durationMs: number;
+  readonly graphics: Phaser.GameObjects.Graphics;
+}
+
 export class CombatSystem {
   private readonly scene: Phaser.Scene;
   private readonly hunters: readonly Hunter[];
@@ -37,6 +47,7 @@ export class CombatSystem {
   private readonly input: InputSystem;
   private readonly projectiles: Projectile[] = [];
   private readonly swingVisuals: SwingVisual[] = [];
+  private readonly chargedVisuals: ChargedVisual[] = [];
 
   constructor(
     scene: Phaser.Scene,
@@ -59,6 +70,7 @@ export class CombatSystem {
     this.tickTargetFlashes(deltaMs);
     this.tickHunterFlashes(deltaMs);
     this.tickSwingVisuals(deltaMs);
+    this.tickChargedVisuals(deltaMs);
     this.pruneDeadTargets();
   }
 
@@ -223,6 +235,148 @@ export class CombatSystem {
       sprite,
     };
     this.projectiles.push(projectile);
+  }
+
+  // Parry-verb entry point (HIT-THE-BEAT-SPEC v2.0 §4, §6): ParrySystem
+  // calls this when a hunter releases a held charge below full Hype —
+  // Outcome A's plain charged AOE, and the same AOE that layers under a
+  // parry in Outcome B. One general behaviour per shape kind, selected
+  // on the hunter's chargedAoe data — no per-id branching. The signature
+  // release (Outcome C) replaces this entirely and is fired by
+  // ParrySystem, not here.
+  fireChargedAoe(hunter: Hunter): void {
+    if (!hunter.alive) return;
+    const aoe = hunter.def.chargedAoe;
+    const damage = this.effectiveDamage(hunter) * aoe.damageMultiplier;
+    switch (aoe.shape) {
+      case 'wedge':
+        this.fireChargedWedge(hunter, aoe, damage);
+        break;
+      case 'radial':
+        this.fireChargedRadial(hunter, aoe, damage);
+        break;
+      case 'line':
+        this.fireChargedLine(hunter, aoe, damage);
+        break;
+    }
+  }
+
+  // Riya — a forward wedge aimed along her facing. Single burst on every
+  // enemy inside the arc.
+  private fireChargedWedge(hunter: Hunter, aoe: WedgeAoe, damage: number): void {
+    const facingAngle = Math.atan2(hunter.facingY, hunter.facingX);
+    for (const target of this.targets) {
+      if (!target.alive) continue;
+      const dx = target.x - hunter.x;
+      const dy = target.y - hunter.y;
+      if (Math.hypot(dx, dy) > aoe.radiusPx + target.radius) continue;
+      const angleToTarget = Math.atan2(dy, dx);
+      const angleDelta = Math.abs(Phaser.Math.Angle.Wrap(angleToTarget - facingAngle));
+      if (angleDelta > aoe.halfAngleRad) continue;
+      this.applyHitToTarget(target, damage);
+    }
+    this.spawnChargedWedgeVisual(hunter, facingAngle, aoe);
+  }
+
+  // Bex — an omnidirectional radial slam. No facing needed.
+  private fireChargedRadial(hunter: Hunter, aoe: RadialAoe, damage: number): void {
+    for (const target of this.targets) {
+      if (!target.alive) continue;
+      const dx = target.x - hunter.x;
+      const dy = target.y - hunter.y;
+      if (Math.hypot(dx, dy) > aoe.radiusPx + target.radius) continue;
+      this.applyHitToTarget(target, damage);
+    }
+    this.spawnChargedRadialVisual(hunter, aoe);
+  }
+
+  // Nim — a piercing line forward through her facing. An enemy is hit if
+  // its centre projects inside the corridor's length and within half its
+  // width (plus the enemy radius, so a graze still connects).
+  private fireChargedLine(hunter: Hunter, aoe: LineAoe, damage: number): void {
+    const fx = hunter.facingX;
+    const fy = hunter.facingY;
+    const halfWidth = aoe.widthPx / 2;
+    for (const target of this.targets) {
+      if (!target.alive) continue;
+      const dx = target.x - hunter.x;
+      const dy = target.y - hunter.y;
+      const along = dx * fx + dy * fy;
+      if (along < -target.radius || along > aoe.lengthPx + target.radius) continue;
+      const perp = Math.abs(dx * -fy + dy * fx);
+      if (perp > halfWidth + target.radius) continue;
+      this.applyHitToTarget(target, damage);
+    }
+    this.spawnChargedLineVisual(hunter, fx, fy, aoe);
+  }
+
+  private spawnChargedWedgeVisual(hunter: Hunter, facingAngle: number, aoe: WedgeAoe): void {
+    const g = this.scene.add.graphics().setDepth(45);
+    g.fillStyle(hunter.def.bodyColor, CHARGED.AOE_VISUAL_FILL_ALPHA);
+    g.beginPath();
+    g.moveTo(hunter.x, hunter.y);
+    g.arc(
+      hunter.x,
+      hunter.y,
+      aoe.radiusPx,
+      facingAngle - aoe.halfAngleRad,
+      facingAngle + aoe.halfAngleRad,
+      false,
+    );
+    g.closePath();
+    g.fillPath();
+    this.pushChargedVisual(g);
+  }
+
+  private spawnChargedRadialVisual(hunter: Hunter, aoe: RadialAoe): void {
+    const g = this.scene.add.graphics().setDepth(45);
+    g.fillStyle(hunter.def.bodyColor, CHARGED.AOE_VISUAL_FILL_ALPHA);
+    g.fillCircle(hunter.x, hunter.y, aoe.radiusPx);
+    this.pushChargedVisual(g);
+  }
+
+  private spawnChargedLineVisual(hunter: Hunter, fx: number, fy: number, aoe: LineAoe): void {
+    const g = this.scene.add.graphics().setDepth(45);
+    g.fillStyle(hunter.def.bodyColor, CHARGED.AOE_VISUAL_FILL_ALPHA);
+    // Corridor rectangle: perpendicular unit is (-fy, fx).
+    const px = -fy;
+    const py = fx;
+    const hw = aoe.widthPx / 2;
+    const ex = hunter.x + fx * aoe.lengthPx;
+    const ey = hunter.y + fy * aoe.lengthPx;
+    g.fillPoints(
+      [
+        new Phaser.Geom.Point(hunter.x + px * hw, hunter.y + py * hw),
+        new Phaser.Geom.Point(ex + px * hw, ey + py * hw),
+        new Phaser.Geom.Point(ex - px * hw, ey - py * hw),
+        new Phaser.Geom.Point(hunter.x - px * hw, hunter.y - py * hw),
+      ],
+      true,
+    );
+    this.pushChargedVisual(g);
+  }
+
+  private pushChargedVisual(graphics: Phaser.GameObjects.Graphics): void {
+    this.chargedVisuals.push({
+      remainingMs: CHARGED.AOE_VISUAL_DURATION_MS,
+      durationMs: CHARGED.AOE_VISUAL_DURATION_MS,
+      graphics,
+    });
+  }
+
+  private tickChargedVisuals(deltaMs: number): void {
+    let write = 0;
+    for (let read = 0; read < this.chargedVisuals.length; read++) {
+      const v = this.chargedVisuals[read];
+      v.remainingMs -= deltaMs;
+      if (v.remainingMs <= 0) {
+        v.graphics.destroy();
+        continue;
+      }
+      v.graphics.setAlpha(Math.max(0, Math.min(1, v.remainingMs / v.durationMs)));
+      this.chargedVisuals[write++] = v;
+    }
+    this.chargedVisuals.length = write;
   }
 
   private tickProjectiles(deltaMs: number): void {
