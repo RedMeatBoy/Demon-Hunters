@@ -25,6 +25,41 @@ export const SIGNATURE_POWERS: Record<SignaturePowerId, { readonly status: Signa
   bridge:    { status: 'stub' },
 };
 
+// Charged-AOE shape — the held-and-released charged attack, shaped per
+// character (HIT-THE-BEAT-SPEC v2.0 §6, HUNTER-SPEC §5). Three shape
+// kinds; CombatSystem runs one general behaviour per kind, selected on
+// `shape` — never on hunter id. Damage multipliers stay roughly equal
+// across hunters so identity lives in the shape, not the number.
+export type ChargedAoeShape = 'wedge' | 'radial' | 'line';
+
+interface ChargedAoeBase {
+  // Damage dealt = the hunter's normal hit damage × this multiplier,
+  // a single burst on all enemies in the AOE. PROVISIONAL (~1.5–2×).
+  readonly damageMultiplier: number;
+}
+
+// Riya — a forward arc/wedge: wider, shorter than her sword swing.
+export interface WedgeAoe extends ChargedAoeBase {
+  readonly shape: 'wedge';
+  readonly radiusPx: number;
+  readonly halfAngleRad: number;
+}
+
+// Bex — a radial slam: full circle around her.
+export interface RadialAoe extends ChargedAoeBase {
+  readonly shape: 'radial';
+  readonly radiusPx: number;
+}
+
+// Nim — a piercing line forward through her facing direction.
+export interface LineAoe extends ChargedAoeBase {
+  readonly shape: 'line';
+  readonly lengthPx: number;
+  readonly widthPx: number;
+}
+
+export type ChargedAoeDef = WedgeAoe | RadialAoe | LineAoe;
+
 // All triangle values are multipliers off Riya = 1.0, per HUNTER-SPEC §2.
 // The baseline absolutes (Riya's interval ms, range px, damage) live in
 // tuning.ts as COMBAT.RIYA_BASELINE_* — change the triangle by editing here,
@@ -38,6 +73,8 @@ export interface HunterDef {
   readonly rangeMultiplier: number;
   readonly damageMultiplier: number;
   readonly signature: SignaturePowerId;
+  // The per-character charged release (HIT-THE-BEAT-SPEC v2.0 §6).
+  readonly chargedAoe: ChargedAoeDef;
   readonly bodyColor: number;
 }
 
@@ -51,6 +88,13 @@ export const HUNTERS: Record<HunterDefId, HunterDef> = {
     rangeMultiplier: 1.0,
     damageMultiplier: 1.0,
     signature: 'breakdown',
+    // Wedge: wider angle, shorter reach than her 130px / 60° sword swing.
+    chargedAoe: {
+      shape: 'wedge',
+      damageMultiplier: 1.8,
+      radiusPx: 104,
+      halfAngleRad: 1.4,
+    },
     bodyColor: 0xE94F37,
   },
   bex: {
@@ -62,6 +106,12 @@ export const HUNTERS: Record<HunterDefId, HunterDef> = {
     rangeMultiplier: 1.0,
     damageMultiplier: 2.0,
     signature: 'drop',
+    // Radial: a big bruiser body-slam, full circle around her.
+    chargedAoe: {
+      shape: 'radial',
+      damageMultiplier: 1.8,
+      radiusPx: 150,
+    },
     bodyColor: 0xF6C453,
   },
   nim: {
@@ -73,6 +123,13 @@ export const HUNTERS: Record<HunterDefId, HunterDef> = {
     rangeMultiplier: 1.5,
     damageMultiplier: 0.5,
     signature: 'bridge',
+    // Line: a piercing volley of stars forward through her facing.
+    chargedAoe: {
+      shape: 'line',
+      damageMultiplier: 1.8,
+      lengthPx: 340,
+      widthPx: 46,
+    },
     bodyColor: 0x44BBA4,
   },
 };
